@@ -1,9 +1,21 @@
 import math
 from datetime import datetime
+import tiktoken
+import jieba
+
+
+def count_tokens(text: str) -> int:
+    """计算文本token数"""
+    try:
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+    except Exception:
+        # 降级方案：粗略估算（1 token ≈ 4 字符）
+        return len(text) // 4
 
 
 def calculate_keyword_relevance(query: str, content: str) -> float:
-    """计算信两段查询与内容的相关性
+    """关键词匹配
 
     Args:
         content: 内容
@@ -12,13 +24,17 @@ def calculate_keyword_relevance(query: str, content: str) -> float:
     Returns:
         float: 相关性分数
     """
-    content_words = set(content.lower().split())
-    query_words = set(query.lower().split())
+    content_words = set(jieba.lcut(content.lower()))
+    query_words = set(jieba.lcut(query.lower()))
     if not query_words:
         return 0.0
-    intersection = content_words & query_words
-    union = content_words | query_words
-    return len(intersection) / len(union) if union else 0.0
+    if query_words.intersection(content_words):
+        return len(query_words) / len(content_words)
+    else:
+        intersection = content_words & query_words
+        union = content_words | query_words
+        return (len(intersection) / len(union) if union else 0.0)  * 0.8
+
 
 def calculate_time_recency(timestamp: datetime,standard: float=24) -> float:
     """计算时间近因性分数

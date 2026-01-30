@@ -1,4 +1,4 @@
-
+from typing import List
 from pydantic import BaseModel
 
 
@@ -13,9 +13,10 @@ class MemoryConfig(BaseModel):
     ### 工作记忆配置 ###
     working_memory_capacity: int = 100 # 工作记忆容量
     working_memory_ttl: int = 60 # 工作记忆 TTL
-
+    working_memory_tokens: int = 2000
     ### 情景记忆配置 ###
 
     ### 语义记忆配置 ###
 
     ### 感知记忆配置 ###
+    perceptual_memory_modalities: List[str] = ["text", "image", "audio", "video"]
