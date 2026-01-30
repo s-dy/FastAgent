@@ -74,6 +74,7 @@ class MemoryManager:
             monitor_task_status(f"添加记忆到 {memory_type}: {memory_id}")
             return memory_id
         else:
+            monitor_task_status(f"不支持的记忆类型: {memory_type}")
             raise ValueError(f"不支持的记忆类型: {memory_type}")
 
     def retrieve_memories(

@@ -43,7 +43,7 @@ class Tool(ABC):
         required = []
 
         for param in parameters:
-            prop = {
+            prop:dict[str,Any] = {
                 "type": param.type,
                 "description": param.description,
             }
@@ -53,7 +53,7 @@ class Tool(ABC):
             # 如果是数组类型，添加 items 定义
             if param.type == 'array':
                 # 默认字符串数组
-                prop["items"] = {"type": "stirng"}
+                prop["items"] = {"type": "string"}
             
             properties[param.name] = prop
             if param.required:

@@ -225,9 +225,9 @@ class TestWorkingMemory(unittest.TestCase):
     def test_get_important(self):
         """测试获取重要的记忆"""
         # 添加多个具有不同重要性的记忆
-        importances = [0.3, 0.8, 0.5, 0.9, 0.1]
+        importance = [0.3, 0.8, 0.5, 0.9, 0.1]
         
-        for i, imp in enumerate(importances):
+        for i, imp in enumerate(importance):
             memory_item = MemoryItem(
                 id=str(uuid.uuid4()),
                 content=f"重要记忆 {i}",
@@ -261,7 +261,7 @@ class TestWorkingMemory(unittest.TestCase):
             self.working_memory.add(memory_item)
         
         # 应用基于重要性的遗忘机制
-        forgotten_count = self.working_memory.forget(strategy="importance_based", threshold=0.5)
+        self.working_memory.forget(strategy="importance_based", threshold=0.5)
         
         # 验证低重要性记忆被遗忘
         remaining_memories = self.working_memory.get_all()
