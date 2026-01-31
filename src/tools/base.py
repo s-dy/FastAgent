@@ -1,5 +1,5 @@
 from abc import ABC,abstractmethod
-from typing import Any
+from typing import Any, Dict
 
 from pydantic import BaseModel
 
@@ -70,3 +70,17 @@ class Tool(ABC):
                 },
             }
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": [param.dict() for param in self.get_parameters()]
+        }
+
+    def __str__(self) -> str:
+        return f"Tool(name={self.name})"
+
+    def __repr__(self) -> str:
+        return self.__str__()

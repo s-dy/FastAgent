@@ -1,9 +1,9 @@
 import asyncio
-import concurrent
+import concurrent.futures
 from typing import Any, Dict, List
 
-from src.tools.tool_registry import ToolRegistry
 from src.monitor import monitor_task_status
+from src.tools.tool_registry import ToolRegistry
 
 
 class AsyncToolExecutor:
@@ -18,16 +18,40 @@ class AsyncToolExecutor:
         loop = asyncio.get_event_loop()
         def _execute():
             return self.tool_registry.execute_tool(tool_name, parameters)
-        result = await loop.run_in_executor(self.executor, _execute)
-        return result
+
+        try:
+            result = await loop.run_in_executor(self.executor, _execute)
+            return result
+        except Exception as e:
+            monitor_task_status(f"❌ 工具 '{tool_name}' 异步执行失败: {e}",level='ERROR')
+            raise Exception(e)
     
-    async def execute_tools_parallel(self, tasks: List[Dict[str, Any]]) -> List[Any]:
+    async def execute_tools_parallel(self, tasks: List[Dict[str, Any]]) -> List[dict]:
         """Execute multiple tools in parallel"""
+        results = []
+
         tasks = [
-            self.execute_tool_async(task["tool_name"], task["parameters"])
+            (task["tool_name"], self.execute_tool_async(task["tool_name"], task["parameters"]))
             for task in tasks
         ]
-        return await asyncio.gather(*tasks)
+        for tool_name, task in tasks:
+            try:
+                result = await task
+                results.append({
+                    "tool_name": tool_name,
+                    "result": result,
+                    "status": "success"
+                })
+            except Exception as e:
+                results.append({
+                    "tool_name": tool_name,
+                    "result": str(e),
+                    "status": "error"
+                })
+        return results
     
-    def __del__(self):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.executor.shutdown(wait=True)
