@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 from src.memory.config import MemoryConfig
-from src.memory.base import MemoryItem, BaseMemory
+from src.memory.base import BaseStore, MemoryItem, BaseMemory
 from utils.calculate import calculate_keyword_relevance, calculate_time_recency
 
 
@@ -17,7 +17,7 @@ class WorkingMemory(BaseMemory):
 
     工作记忆采用了纯内存存储方案，配合TTL（Time To Live）机制进行自动清理。这种设计的优势在于访问速度极快，但也意味着工作记忆的内容在系统重启后会丢失。这种特性正好符合工作记忆的定位，存储临时的、易变的信息。
     """
-    def __init__(self, config: MemoryConfig, storage_backend):
+    def __init__(self, config: MemoryConfig, storage_backend:BaseStore):
         super().__init__(config, storage_backend)
 
         # 工作记忆特定配置
