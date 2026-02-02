@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any, List
 from src.memory.base import MemoryItem
 from src.memory.config import MemoryConfig
 from src.memory.memory_types import WorkingMemory,EpisodicMemory,SemanticMemory,PerceptualMemory
-from src.memory.store import MemoryStore
+from src.memory.store import MemoryStore, PostGreStore, MilvusVectorStore
 from src.monitor import monitor_task_status
 
 
@@ -27,7 +27,9 @@ class MemoryManager:
             self.memory_types['working'] = WorkingMemory(self.config, MemoryStore())
 
         if self.config.enable_episodic:
-            self.memory_types['episodic'] = EpisodicMemory(self.config)
+            postgres_store = PostGreStore({})
+            milvus_vector_store = MilvusVectorStore()
+            self.memory_types['episodic'] = EpisodicMemory(self.config, MemoryStore(), postgres_store, milvus_vector_store)
 
         if self.config.enable_semantic:
             self.memory_types['semantic'] = SemanticMemory(self.config)

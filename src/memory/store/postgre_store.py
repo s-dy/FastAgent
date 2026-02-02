@@ -243,7 +243,7 @@ class PostGreStore(BaseDocumentStore):
                 "memory_type": row[3],
                 "timestamp": row[4],
                 "importance": row[5],
-                "properties": json.loads(row[6]) if row[6] else {},
+                "properties": row[6],
                 "created_at": row[7]
             })
 

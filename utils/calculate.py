@@ -4,6 +4,10 @@ import tiktoken
 import jieba
 
 
+def split_sentence(sentence):
+    keyword = jieba.lcut(sentence)
+    return keyword
+
 def count_tokens(text: str) -> int:
     """计算文本token数"""
     try:

@@ -25,7 +25,7 @@ class Episode(BaseModel):
     timestamp: datetime # 时间戳
     content: str # 内容
     context: dict # 上下文
-    outcome: dict # 结果
+    outcome: str # 结果
     importance: float # 重要性
 
 
@@ -157,9 +157,8 @@ class BaseMemory(ABC):
     定义所有记忆类型的通用接口和行为
     """
 
-    def __init__(self, config: MemoryConfig, storage_backend: BaseStore):
+    def __init__(self, config: MemoryConfig):
         self.config = config
-        self.storage = storage_backend
         self.memory_type = self.__class__.__name__.lower().replace("memory", "")
 
     @abstractmethod
