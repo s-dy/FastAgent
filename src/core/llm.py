@@ -1,10 +1,9 @@
 import os
-from typing import Optional, List, Dict, Generator, Iterator
+from typing import Optional, List, Dict, Iterator
 from openai import OpenAI
 
 from src.monitor import monitor_task_status
 
-SUPPORTED_PROVIDERS = ["openai", "modelscope", "zhipu", "qwen", "ollama", "vllm", "local"]
 
 class LLMClient:
     def __init__(
