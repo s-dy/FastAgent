@@ -3,7 +3,7 @@ import time
 import numpy as np
 from unittest.mock import patch
 
-from src.memory.store.milvus_store import MilvusVectorStore, MilvusConnectionManager
+from src.memory.store.milvus_store import MilvusVectorStore
 
 
 class TestMilvusVectorStore(unittest.TestCase):
@@ -77,8 +77,8 @@ class TestMilvusVectorStore(unittest.TestCase):
         store2 = MilvusVectorStore(**self.test_config)
         
         # 应该是同一个实例（通过连接管理器）
-        manager1 = MilvusConnectionManager.get_instance(**self.test_config)
-        manager2 = MilvusConnectionManager.get_instance(**self.test_config)
+        manager1 = MilvusVectorStore(**self.test_config)
+        manager2 = MilvusVectorStore(**self.test_config)
         self.assertIs(manager1, manager2)
 
     def test_add_vectors(self):

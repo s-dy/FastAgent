@@ -18,8 +18,9 @@ class WorkingMemory(BaseMemory):
     工作记忆采用了纯内存存储方案，配合TTL（Time To Live）机制进行自动清理。这种设计的优势在于访问速度极快，但也意味着工作记忆的内容在系统重启后会丢失。这种特性正好符合工作记忆的定位，存储临时的、易变的信息。
     """
     def __init__(self, config: MemoryConfig, storage_backend:BaseStore):
-        super().__init__(config, storage_backend)
+        super().__init__(config)
 
+        self.storage = storage_backend
         # 工作记忆特定配置
         self.max_capacity = self.config.working_memory_capacity
         self.max_tokens = self.config.working_memory_tokens

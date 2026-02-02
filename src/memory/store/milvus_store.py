@@ -1,4 +1,3 @@
-import threading
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from pymilvus import (
@@ -14,48 +13,22 @@ from src.monitor import monitor_task_status
 
 
 
-class MilvusConnectionManager:
-    """Milvus连接管理器 - 防止重复连接和初始化"""
-    _instances = {}  # key: (host, port, collection_name) -> MilvusVectorStore instance
-    _lock = threading.Lock()
+class MilvusVectorStore:
+    """Milvus向量数据库存储实现"""
+    _instances = {}
 
-    @classmethod
-    def get_instance(
-            cls,
-            host: str = "localhost",
-            port: int = 19530,
-            collection_name: str = "fast_agents_vectors",
-            vector_size: int = 384,
-            metric_type: str = "IP",
-            **kwargs
-    ) -> 'MilvusVectorStore':
+    def __new__(cls, *args, **kwargs):
         """获取或创建Milvus实例（单例模式）"""
         # 创建唯一键
+        host = kwargs.get("host", "localhost")
+        port = kwargs.get("port", "19530")
+        collection_name = kwargs.get("collection_name", "fast_agents_vectors")
         key = (host, port, collection_name)
 
         if key not in cls._instances:
-            with cls._lock:
-                # 双重检查锁定
-                if key not in cls._instances:
-                    monitor_task_status(f"🔄 创建新的Milvus连接: {collection_name}")
-                    cls._instances[key] = MilvusVectorStore(
-                        host=host,
-                        port=port,
-                        collection_name=collection_name,
-                        vector_size=vector_size,
-                        metric_type=metric_type,
-                        **kwargs
-                    )
-                else:
-                    monitor_task_status(f"♻️ 复用现有Milvus连接: {collection_name}")
-        else:
-            monitor_task_status(f"♻️ 复用现有Milvus连接: {collection_name}")
+            cls._instances[key] = super().__new__(cls)
 
         return cls._instances[key]
-
-
-class MilvusVectorStore:
-    """Milvus向量数据库存储实现"""
 
     def __init__(
             self,

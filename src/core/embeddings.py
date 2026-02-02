@@ -13,8 +13,6 @@ from dataclasses import dataclass,field
 import numpy as np
 import requests
 import torch
-from torch import Tensor
-import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel
 
 from src.monitor import monitor_task_status
