@@ -1,9 +1,34 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional,List
 
-from src.core.llm import LLM
-from src.core.config import Config
-from src.core.message import Message
+from src.core import LLMClient, Config, Message
+
+
+class MessageState:
+    """消息状态管理类"""
+
+    def __init__(self, messages: List[Message] = None):
+        self.messages: List[Message] = messages or []
+
+    def add_message(self, message: Message) -> None:
+        """添加消息"""
+        self.messages.append(message)
+
+    def clear(self) -> None:
+        """清空所有消息"""
+        self.messages.clear()
+
+    def get_messages(self) -> List[Message]:
+        """获取所有消息"""
+        return self.messages.copy()
+
+    def get_latest_message(self) -> Optional[Message]:
+        """获取最新消息"""
+        return self.messages[-1] if self.messages else None
+
+    def get_message_count(self) -> int:
+        """获取消息总数"""
+        return len(self.messages)
 
 
 class Agent(ABC):
@@ -11,7 +36,7 @@ class Agent(ABC):
     def __init__(
         self,
         name: str,
-        llm: LLM,
+        llm: LLMClient,
         system_prompt: Optional[str] = None,
         config: Optional[Config] = None
     ) -> None:
@@ -19,7 +44,7 @@ class Agent(ABC):
         self.llm = llm
         self.system_prompt = system_prompt
         self.config = config or Config()
-    
+
     @abstractmethod
     def run(self,input_text: str, **kwargs) -> str:
         """Run the agent with the given input text."""

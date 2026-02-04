@@ -1,0 +1,213 @@
+import json
+from typing import Optional, Union, Any
+
+from src.agents.base import Agent, MessageState
+from src.core import Config, LLMClient, AIMessage, HumanMessage
+from src.monitor import monitor_task_status
+from src.tools import ToolRegistry,Tool
+from src.tools.builtin import MCPTool
+
+
+class SimpleAgent(Agent):
+    """简单的对话Agent，支持可选的工具调用"""
+
+    def __init__(
+        self,
+        name: str,
+        llm: LLMClient,
+        state: MessageState,
+        system_prompt: Optional[str] = None,
+        config: Optional[Config] = None,
+        tool_registry: Optional[ToolRegistry] = None,
+        enable_tool_calling: bool = True
+    ):
+        """
+        :param name: agent名称
+        :param llm: llm调用类
+        :param state: 状态管理
+        :param system_prompt: 系统提示词模版
+        :param config: agent配置
+        :param tool_registry: 工具注册器
+        :param enable_tool_calling: 是否启用工具调用
+        """
+        super().__init__(name, llm, system_prompt, config)
+        self.state = state
+        self.tool_registry = tool_registry
+        self.enable_tool_calling = enable_tool_calling and tool_registry is not None
+
+    def _get_system_prompt(self) -> str:
+        """构建系统提示词，注入工具描述"""
+        base_prompt = self.system_prompt or "你是一个可靠的AI助理，能够在需要时调用工具完成任务。"
+
+        if not self.tool_registry or not self.enable_tool_calling:
+            return base_prompt
+
+        tools_description = self.tool_registry.get_tools_description()
+        if not tools_description or tools_description == "暂无可用工具":
+            return base_prompt
+
+        prompt = base_prompt + "\n\n## 可用工具\n"
+        prompt += "当你判断需要外部信息或执行动作时，可以直接通过函数调用使用以下工具：\n"
+        prompt += tools_description + "\n"
+        prompt += "\n请主动决定是否调用工具，合理利用多次调用来获得完备答案。"
+        return prompt
+
+    def _build_tool_schemas(self) -> list[dict[str, Any]]:
+        if not self.tool_registry or not self.enable_tool_calling:
+            return []
+
+        schemas: list[dict[str, Any]] = []
+        # Tool对象
+        for tool in self.tool_registry.get_all_tools():
+            schema = tool.to_openai_schema()
+            schemas.append(schema)
+        return schemas
+
+    @staticmethod
+    def _parse_function_call_arguments(arguments: Optional[str]) -> dict[str, Any]:
+        """解析模型返回的JSON字符串参数"""
+        if not arguments:
+            return {}
+
+        try:
+            parsed = json.loads(arguments)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+    def _execute_tool_call(self, tool_name: str, tool_arguments: str) -> str:
+        """执行工具调用并返回字符串结果"""
+        if not self.tool_registry:
+            return "❌ 错误：未配置工具注册表"
+
+        tool = self.tool_registry.get_tool(tool_name)
+        if tool:
+            try:
+                arguments = self._parse_function_call_arguments(tool_arguments)
+                typed_arguments = tool.convert_parameter_types(arguments)
+                return tool.run(typed_arguments)
+            except Exception as exc:
+                return f"❌ 工具调用失败：{exc}"
+
+        return f"❌ 错误：未找到工具 '{tool_name}'"
+
+    def run(
+        self,
+        input_text: str,
+        *,
+        max_tool_iterations: Optional[int] = 3,
+        tool_choice: Optional[Union[str, dict]] = None,
+        **kwargs,
+    ) -> str:
+        """
+        执行函数调用范式的对话流程
+        """
+        messages: list[dict[str, Any]] = []
+        # 添加增强后的系统提示词模版
+        system_prompt = self._get_system_prompt()
+        messages.append({"role": "system", "content": system_prompt})
+
+        # 添加历史消息
+        for msg in self.state.get_messages():
+            messages.append({"role": msg.role, "content": msg.content})
+
+        # 添加用户消息
+        messages.append({"role": "user", "content": input_text})
+
+        # 构建适用于openai的tools_schemas
+        tool_schemas = self._build_tool_schemas()
+        if not tool_schemas:
+            response = self.llm.invoke(messages, **kwargs)
+            if isinstance(response, AIMessage):
+                self.state.add_message(HumanMessage(input_text))
+                self.state.add_message(response)
+                return response.content
+            else:
+                monitor_task_status('Error: 未提供工具，但返回工具调用消息',level='ERROR')
+                return ""
+
+        current_iteration = 0
+        final_response = ""
+
+        while current_iteration < max_tool_iterations:
+            response = self.llm.invoke(
+                messages,
+                tools=tool_schemas,
+                tool_choice=tool_choice,
+                **kwargs,
+            )
+            if isinstance(response, list):
+                content = response[0].content
+                assistant_payload: dict[str, Any] = {"role": "assistant", "content": content, "tool_calls": []}
+                # 添加消息
+                for tool_msg in response:
+                    assistant_payload["tool_calls"].append(
+                        {
+                            "id": tool_msg.tool_call_id,
+                            "type": tool_msg.tool_type,
+                            "function": {
+                                "name": tool_msg.tool_name,
+                                "arguments": tool_msg.tool_arguments,
+                            },
+                        }
+                    )
+                messages.append(assistant_payload)
+                # 执行工具
+                for tool_msg in response:
+                    tool_name = tool_msg.tool_name
+                    tool_arguments = tool_msg.tool_arguments
+                    result = self._execute_tool_call(tool_name, tool_arguments)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_msg.tool_call_id,
+                            "name": tool_name,
+                            "content": result,
+                        }
+                    )
+
+                current_iteration += 1
+            else:
+                final_response = response.content
+                messages.append({"role": "assistant", "content": final_response})
+                break
+
+        # 超过最大迭代次数时的兜底措施
+        if current_iteration >= max_tool_iterations and not final_response:
+            final_choice = self.llm.invoke(
+                messages,
+                tools=tool_schemas,
+                tool_choice="none",
+                **kwargs,
+            )
+            if isinstance(final_choice, AIMessage):
+                final_response = final_choice.content
+            elif isinstance(final_choice, list):
+                final_response = final_choice[0].content
+            else:
+                final_response = "无法回答该问题!"
+            messages.append({"role": "assistant", "content": final_response})
+
+        self.state.add_message(HumanMessage(input_text))
+        self.state.add_message(AIMessage(final_response))
+        return final_response
+
+    def add_tool(self, tool: Union[MCPTool,Tool]) -> None:
+        """便捷方法：将工具注册到当前Agent"""
+        if not self.tool_registry:
+            self.tool_registry = ToolRegistry()
+
+        if hasattr(tool, "auto_expand") and getattr(tool, "auto_expand"):
+            expanded_tools = tool.get_expanded_tools()
+            if expanded_tools:
+                for expanded_tool in expanded_tools:
+                    self.tool_registry.register_tool(expanded_tool)
+                monitor_task_status(f"✅ MCP工具 '{tool.name}' 已展开为 {len(expanded_tools)} 个独立工具")
+                return
+
+        self.tool_registry.register_tool(tool)
+
+    def list_tools(self) -> list[Tool]:
+        if self.tool_registry:
+            return self.tool_registry.get_all_tools()
+        return []
