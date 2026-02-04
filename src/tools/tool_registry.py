@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from src.tools.base import Tool, ToolParameter
 from src.monitor import monitor_task_status
@@ -48,3 +48,12 @@ class ToolRegistry:
             return self._functions[tool_name]["function"](**parameters)
         else:
             raise ValueError(f"工具 '{tool_name}' 不存在")
+
+    def get_all_tools(self) -> list[Tool]:
+        return list(self.tools.values())
+
+    def get_tool(self, tool_name: str) -> Optional[Tool]:
+        """获取工具"""
+        if tool_name in self.tools:
+            return self.tools[tool_name]
+        return None

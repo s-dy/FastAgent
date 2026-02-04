@@ -192,8 +192,7 @@ class MemoryTool(Tool):
                 return f"🔍 未找到与 '{query}' 相关的记忆"
 
             # 格式化结果
-            formatted_results = []
-            formatted_results.append(f"🔍 找到 {len(results)} 条相关记忆:")
+            formatted_results = [f"🔍 找到 {len(results)} 条相关记忆:"]
 
             for i, memory in enumerate(results, 1):
                 memory_type_label = {

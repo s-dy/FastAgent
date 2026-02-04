@@ -1,20 +1,24 @@
 import os
-from typing import Optional, List, Dict, Iterator
+from typing import Optional, List, Dict, Iterator, Union
 from openai import OpenAI
 
+from openai.types.chat import ChatCompletionChunk
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
 from src.monitor import monitor_task_status
+from src.core.message import AIMessage,ToolMessage
 
 
 class LLMClient:
     def __init__(
         self,
-        model:str,
-        api_key:Optional[str]=None,
-        base_url:Optional[str]=None,
-        provider:Optional[str]="",
-        temperature:Optional[float]=0.0,
-        max_tokens:Optional[int]=1024,
-        timeout:Optional[int]=60,
+        model: str,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        provider: Optional[str] = "",
+        temperature: Optional[float] = 0.0,
+        max_tokens: Optional[int] = 1024,
+        timeout: Optional[int] = 60,
         **kwargs
     ) -> None:
         """
@@ -30,12 +34,12 @@ class LLMClient:
             max_tokens: 最大token数
             timeout: 超时时间，从环境变量LLM_TIMEOUT读取，默认60秒
         """
-
         self.model = model or os.getenv("LLM_MODEL_ID")
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout or int(os.getenv("LLM_TIMEOUT", 60))
         self.provider = provider or self._auto_detect_provider(api_key, base_url)
+        
         if self.provider == "local":
             api_key = api_key or os.getenv("LLM_API_KEY")
             base_url = base_url or os.getenv("LLM_BASE_URL")
@@ -46,8 +50,10 @@ class LLMClient:
             raise Exception("API密钥和服务地址必须被提供或在.env文件中定义。")
 
         self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=self.timeout)
-    
-    def _auto_detect_provider(self,api_key:Optional[str]=None,base_url:Optional[str]=None)->str:
+        # 存储额外配置参数
+        self.default_kwargs = kwargs
+
+    def _auto_detect_provider(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> str:
         """
         自动检测LLM提供商
 
@@ -188,45 +194,127 @@ class LLMClient:
             resolved_base_url = base_url or os.getenv("LLM_BASE_URL")
             return resolved_api_key, resolved_base_url
 
-    def invoke(self,messages:List[Dict[str,str]], **kwargs) -> str:
-        """调用模型"""
-        monitor_task_status('Strat Call LLM Model')
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(Exception),
+        reraise=True
+    )
+    def invoke(self, messages: List[Dict[str, str]], tools: Optional[List[Dict]] = None, 
+               tool_choice: Optional[Union[str, Dict]] = None, **kwargs) -> Union[AIMessage, List[ToolMessage]]:
+        """
+        调用模型生成响应，支持工具调用
+        
+        Args:
+            messages: 消息列表
+            tools: 工具定义列表（OpenAI格式）
+            tool_choice: 工具选择策略 ("auto", "none", "required" 或具体工具)
+            **kwargs: 额外参数，会覆盖默认配置
+            
+        Returns:
+            模型响应对象（包含可能的工具调用）
+        """
+        monitor_task_status('开始调用LLM模型',messages)
+        
+        # 合并默认参数和传入参数
+        call_kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", self.temperature),
+            "max_tokens": kwargs.get("max_tokens", self.max_tokens),
+            "stream": False,
+        }
+        
+        # 添加工具相关参数
+        if tools is not None:
+            call_kwargs["tools"] = tools
+        if tool_choice is not None:
+            call_kwargs["tool_choice"] = tool_choice
+            
+        # 添加其他参数，排除已处理的参数
+        excluded_keys = {'temperature', 'max_tokens', 'stream', 'tools', 'tool_choice'}
+        for key, value in kwargs.items():
+            if key not in excluded_keys:
+                call_kwargs[key] = value
+        for key, value in self.default_kwargs.items():
+            if key not in call_kwargs and key not in excluded_keys:
+                call_kwargs[key] = value
+
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=kwargs.get("temperature", self.temperature),
-                max_tokens=kwargs.get("max_tokens", self.max_tokens),
-                **{k: v for k, v in kwargs.items() if k not in ['temperature', 'max_tokens']},
-                stream=True
-            )
-            monitor_task_status('LLM Call Success')
-            result = []
-            for chunk in response:
-                content = chunk.choices[0].delta.content or ""
-                if content:
-                    result.append(content)
-            return "".join(result)
+            response = self.client.chat.completions.create(**call_kwargs)
+            monitor_task_status('LLM调用成功')
+            msg = response.choices[0].message
+            usage = response.usage
+            if not msg.tool_calls:
+                return AIMessage(content=msg.content,metadata={'reasoning_content': msg.reasoning_content if hasattr(msg, 'reasoning_content') else None})
+            else:
+                tool_calls = msg.tool_calls
+                tool_msgs = []
+                for tool_call in tool_calls:
+                    tool_msgs.append(ToolMessage(
+                        content=msg.content,
+                        tool_call_id=tool_call.id,
+                        tool_name=tool_call.function.name,
+                        tool_arguments=tool_call.function.arguments,
+                        tool_type=tool_call.type
+                    ))
+                return tool_msgs
+
         except Exception as e:
-            monitor_task_status(f"LLM调用失败: {str(e)}",level='ERROR')
+            monitor_task_status(f"LLM调用失败: {str(e)}", level='ERROR')
             raise e
 
-    def stream_invoke(self,messages:List[Dict[str,str]], **kwargs) -> Iterator[str]:
-        """流式调用模型"""
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=kwargs.get("temperature", self.temperature),
-                max_tokens=kwargs.get("max_tokens", self.max_tokens),
-                stream=True,
-            )
-            monitor_task_status('LLM Call Success')
-            for chunk in response:
-                content = chunk.choices[0].delta.content or ""
-                if content:
-                    yield content
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(Exception),
+        reraise=True
+    )
+    def stream_invoke(self, messages: List[Dict[str, str]], tools: Optional[List[Dict]] = None,
+                      tool_choice: Optional[Union[str, Dict]] = None, **kwargs) -> Iterator[ChatCompletionChunk]:
+        """
+        流式调用模型生成响应，支持工具调用
+        
+        Args:
+            messages: 消息列表
+            tools: 工具定义列表（OpenAI格式）
+            tool_choice: 工具选择策略
+            **kwargs: 额外参数
+            
+        Yields:
+            流式响应块（可能是内容块或工具调用块）
+        """
+        # 合并默认参数和传入参数
+        call_kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", self.temperature),
+            "max_tokens": kwargs.get("max_tokens", self.max_tokens),
+            "stream": True,
+        }
+        
+        # 添加工具相关参数
+        if tools is not None:
+            call_kwargs["tools"] = tools
+        if tool_choice is not None:
+            call_kwargs["tool_choice"] = tool_choice
+            
+        # 添加其他参数，排除已处理的参数
+        excluded_keys = {'temperature', 'max_tokens', 'stream', 'tools', 'tool_choice'}
+        for key, value in kwargs.items():
+            if key not in excluded_keys:
+                call_kwargs[key] = value
+        for key, value in self.default_kwargs.items():
+            if key not in call_kwargs and key not in excluded_keys:
+                call_kwargs[key] = value
 
+        try:
+            response = self.client.chat.completions.create(**call_kwargs)
+            monitor_task_status('LLM流式调用成功')
+            
+            for chunk in response:
+                yield chunk
+                
         except Exception as e:
-            monitor_task_status(f"LLM调用失败: {str(e)}",level='ERROR')
+            monitor_task_status(f"LLM流式调用失败: {str(e)}", level='ERROR')
             raise e
