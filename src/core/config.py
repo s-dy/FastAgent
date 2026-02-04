@@ -11,6 +11,7 @@ class Config(BaseModel):
     default_provider: str = "dashscope"
     temperature: float = 0.7
     max_tokens: Optional[int] = 1024
+    available_tools: bool = True # 模型是否支持工具调用
 
     # 系统配置
     debug: bool = False

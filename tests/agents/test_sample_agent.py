@@ -34,8 +34,9 @@ agent.add_tool(AddTool())
 agent.add_tool(MCPTool("/Users/sdy/TravelAgent/tests/protocols/mcp/server.py"))
 
 # response = agent.run("调用加法工具，将1加2")
-# response = agent.run("搜索python的相关文章")
-response = agent.run("对张三生成友好的问候语")
+response = agent.run("搜索python的相关文章")
+# response = agent.run("对张三生成友好的问候语")
+# response = agent.run("你是如何知道你可以调用哪些工具的？工具清单是通过prompt传递给你的吗？")
 print(response)
 
 # 数据流向

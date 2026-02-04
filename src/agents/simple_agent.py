@@ -9,7 +9,7 @@ from src.tools.builtin import MCPTool
 
 
 class SimpleAgent(Agent):
-    """简单的对话Agent，支持可选的工具调用"""
+    """简单的对话React Agent，支持可选的工具调用"""
 
     def __init__(
         self,
@@ -19,7 +19,8 @@ class SimpleAgent(Agent):
         system_prompt: Optional[str] = None,
         config: Optional[Config] = None,
         tool_registry: Optional[ToolRegistry] = None,
-        enable_tool_calling: bool = True
+        enable_tool_calling: bool = True,
+        max_step: Optional[int] = None,
     ):
         """
         :param name: agent名称
@@ -29,19 +30,23 @@ class SimpleAgent(Agent):
         :param config: agent配置
         :param tool_registry: 工具注册器
         :param enable_tool_calling: 是否启用工具调用
+        :param max_step: 运行的最大循环步数
         """
         super().__init__(name, llm, system_prompt, config)
         self.state = state
         self.tool_registry = tool_registry
         self.enable_tool_calling = enable_tool_calling and tool_registry is not None
+        self.max_step = max_step if max_step else 3 if enable_tool_calling else 1
 
     def _get_system_prompt(self) -> str:
         """构建系统提示词，注入工具描述"""
         base_prompt = self.system_prompt or "你是一个可靠的AI助理，能够在需要时调用工具完成任务。"
 
-        if not self.tool_registry or not self.enable_tool_calling:
+        # 如果没有工具注册器、或不开启工具调用、或模型支持工具调用（无需通过构建prompt让llm调用工具）则返回基础prompt
+        if not self.tool_registry or not self.enable_tool_calling or self.config.available_tools:
             return base_prompt
 
+        # 模型不支持工具调用，构建prompt
         tools_description = self.tool_registry.get_tools_description()
         if not tools_description or tools_description == "暂无可用工具":
             return base_prompt
@@ -52,10 +57,11 @@ class SimpleAgent(Agent):
         prompt += "\n请主动决定是否调用工具，合理利用多次调用来获得完备答案。"
         return prompt
 
-    def _build_tool_schemas(self) -> list[dict[str, Any]]:
-        if not self.tool_registry or not self.enable_tool_calling:
-            return []
-
+    def _build_tool_schemas(self) -> Optional[list[dict[str, Any]]]:
+        # 不支持工具调用
+        if not self.tool_registry or not self.enable_tool_calling or not self.config.available_tools:
+            return None
+        # 支持工具调用
         schemas: list[dict[str, Any]] = []
         # Tool对象
         for tool in self.tool_registry.get_all_tools():
@@ -95,7 +101,6 @@ class SimpleAgent(Agent):
         self,
         input_text: str,
         *,
-        max_tool_iterations: Optional[int] = 3,
         tool_choice: Optional[Union[str, dict]] = None,
         **kwargs,
     ) -> str:
@@ -116,20 +121,13 @@ class SimpleAgent(Agent):
 
         # 构建适用于openai的tools_schemas
         tool_schemas = self._build_tool_schemas()
-        if not tool_schemas:
-            response = self.llm.invoke(messages, **kwargs)
-            if isinstance(response, AIMessage):
-                self.state.add_message(HumanMessage(input_text))
-                self.state.add_message(response)
-                return response.content
-            else:
-                monitor_task_status('Error: 未提供工具，但返回工具调用消息',level='ERROR')
-                return ""
 
         current_iteration = 0
         final_response = ""
 
-        while current_iteration < max_tool_iterations:
+        while current_iteration < self.max_step:
+            current_iteration += 1
+
             response = self.llm.invoke(
                 messages,
                 tools=tool_schemas,
@@ -165,28 +163,15 @@ class SimpleAgent(Agent):
                             "content": result,
                         }
                     )
-
-                current_iteration += 1
             else:
                 final_response = response.content
-                messages.append({"role": "assistant", "content": final_response})
                 break
 
         # 超过最大迭代次数时的兜底措施
-        if current_iteration >= max_tool_iterations and not final_response:
-            final_choice = self.llm.invoke(
-                messages,
-                tools=tool_schemas,
-                tool_choice="none",
-                **kwargs,
-            )
-            if isinstance(final_choice, AIMessage):
-                final_response = final_choice.content
-            elif isinstance(final_choice, list):
-                final_response = final_choice[0].content
-            else:
-                final_response = "无法回答该问题!"
-            messages.append({"role": "assistant", "content": final_response})
+        if current_iteration >= self.max_step and not final_response:
+            final_response = "抱歉，我无法在限定步数内完成这个任务。"
+
+        messages.append({"role": "assistant", "content": final_response})
 
         self.state.add_message(HumanMessage(input_text))
         self.state.add_message(AIMessage(final_response))

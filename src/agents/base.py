@@ -30,6 +30,13 @@ class MessageState:
         """获取消息总数"""
         return len(self.messages)
 
+    def get_dict_messages(self) -> list[dict]:
+        """获取结构化后的数据"""
+        result = []
+        for msg in self.messages:
+            result.append({"role": msg.role, "content": msg.content})
+        return result
+
 
 class Agent(ABC):
     """Base class for all agents."""

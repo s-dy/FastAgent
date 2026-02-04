@@ -34,7 +34,7 @@ class MilvusVectorStore:
             self,
             host: str = "localhost",
             port: int = 19530,
-            collection_name: str = "hello_agents_vectors",
+            collection_name: str = "fast_agents_vectors",
             vector_size: int = 1024,
             metric_type: str = "IP",
             **kwargs
