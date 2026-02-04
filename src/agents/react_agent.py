@@ -8,8 +8,11 @@ from src.tools import ToolRegistry,Tool
 from src.tools.builtin import MCPTool
 
 
-class SimpleAgent(Agent):
-    """简单的对话React Agent，支持可选的工具调用"""
+class ReactAgent(Agent):
+    """
+    思考-行动循环
+    简单的对话React Agent，支持可选的工具调用
+    """
 
     def __init__(
         self,

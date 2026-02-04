@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-from src.agents import MessageState,SimpleAgent
+from src.agents import MessageState,ReactAgent
 from src.core import LLMClient
 from src.tools import ToolRegistry, Tool, ToolParameter
 from src.tools.builtin import MCPTool
@@ -10,7 +10,7 @@ load_dotenv()
 
 
 llm = LLMClient("kimi-k2-thinking",api_key=os.getenv("DASHSCOPE_API_KEY"),base_url=os.getenv("DASHSCOPE_BASE_URL"))
-agent = SimpleAgent(name="test_sample_agent",llm=llm,state=MessageState(),tool_registry=ToolRegistry())
+agent = ReactAgent(name="test_sample_agent",llm=llm,state=MessageState(),tool_registry=ToolRegistry())
 
 agent.add_tool(MCPTool("http://localhost:8080/mcp"))
 
