@@ -1,6 +1,6 @@
 import unittest
-from src.memory import MemoryConfig
-from src.tools.builtin import MemoryTool
+from fastagent.memory import MemoryConfig
+from fastagent.tools.builtin import MemoryTool
 
 
 class TestMemoryTool(unittest.TestCase):

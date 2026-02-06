@@ -1,10 +1,10 @@
 import os
 from dotenv import load_dotenv
 
-from src.agents import MessageState,ReactAgent
-from src.core import LLMClient
-from src.tools import ToolRegistry, Tool, ToolParameter
-from src.tools.builtin import MCPTool
+from fastagent.agents import MessageState,ReactAgent
+from fastagent.core import LLMClient
+from fastagent.tools import ToolRegistry, Tool, ToolParameter
+from fastagent.tools.builtin import MCPTool
 
 load_dotenv()
 

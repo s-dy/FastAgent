@@ -8,8 +8,8 @@ from typing import Dict, Any, List
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from src.protocols.mcp.client import MCPClient
-from src.protocols.mcp.server import MCPServer
+from fastagent.protocols.mcp.client import MCPClient
+from fastagent.protocols.mcp.server import MCPServer
 
 
 class TestMCPClientBasic(unittest.TestCase):

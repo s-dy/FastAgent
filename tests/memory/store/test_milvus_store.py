@@ -3,7 +3,7 @@ import time
 import numpy as np
 from unittest.mock import patch
 
-from src.memory.store.milvus_store import MilvusVectorStore
+from fastagent.memory.store.milvus_store import MilvusVectorStore
 
 
 class TestMilvusVectorStore(unittest.TestCase):

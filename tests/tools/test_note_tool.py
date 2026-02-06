@@ -3,7 +3,7 @@ import os
 import tempfile
 import shutil
 from datetime import datetime
-from src.tools.builtin.note_tool import NoteTool
+from fastagent.tools.builtin.note_tool import NoteTool
 
 class TestNoteTool(unittest.TestCase):
     def setUp(self):

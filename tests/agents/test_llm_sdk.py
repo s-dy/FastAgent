@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-from src.core.llm import LLMClient
+from fastagent.core.llm import LLMClient
 
 load_dotenv()
 

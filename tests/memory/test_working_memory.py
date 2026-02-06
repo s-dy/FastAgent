@@ -1,9 +1,9 @@
 import unittest
 import uuid
 from datetime import datetime, timedelta
-from src.memory import MemoryConfig, MemoryItem
-from src.memory.store import MemoryStore
-from src.memory.memory_types import WorkingMemory
+from fastagent.memory import MemoryConfig, MemoryItem
+from fastagent.memory.store import MemoryStore
+from fastagent.memory.memory_types import WorkingMemory
 
 
 class TestWorkingMemory(unittest.TestCase):

@@ -1,6 +1,6 @@
 import asyncio
 
-from src.tools import ToolRegistry, AsyncToolExecutor
+from fastagent.tools import ToolRegistry, AsyncToolExecutor
 
 
 async def demo_parallel_execution():

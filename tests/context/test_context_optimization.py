@@ -1,12 +1,12 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from src.context.builder import ContextBuilder, SectionInfo
-from src.context.config import ContextConfig
-from src.context.base import ContextPacket
-from src.core.message import Message
-from src.tools.builtin import MemoryTool
-from src.memory.config import MemoryConfig
+from fastagent.context.builder import ContextBuilder, SectionInfo
+from fastagent.context.config import ContextConfig
+from fastagent.context.base import ContextPacket
+from fastagent.core.message import Message
+from fastagent.tools.builtin import MemoryTool
+from fastagent.memory.config import MemoryConfig
 from utils.calculate import count_tokens
 
 

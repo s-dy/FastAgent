@@ -1,8 +1,8 @@
 import os
 
-from src.agents import MessageState
-from src.agents.multi_agent import Executor, MultiAgent
-from src.core import LLMClient
+from fastagent.agents import MessageState
+from fastagent.agents.multi_agent import Executor, MultiAgent
+from fastagent.core import LLMClient
 
 
 llm = LLMClient(os.getenv('LAB_MODEL_NAME'),os.getenv("LAB_API_KEY"),os.getenv("LAB_BASE_URL"))

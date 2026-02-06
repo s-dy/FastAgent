@@ -1,8 +1,8 @@
 import os
 
-from src.agents import MessageState
-from src.agents.plan_and_execute_agent import PlanAndExecuteAgent
-from src.core import LLMClient
+from fastagent.agents import MessageState
+from fastagent.agents.plan_and_execute_agent import PlanAndExecuteAgent
+from fastagent.core import LLMClient
 
 
 llm = LLMClient("kimi-k2-thinking",api_key=os.getenv("DASHSCOPE_API_KEY"),base_url=os.getenv("DASHSCOPE_BASE_URL"))

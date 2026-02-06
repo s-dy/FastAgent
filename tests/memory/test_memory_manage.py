@@ -1,6 +1,6 @@
 import unittest
 import uuid
-from src.memory.manager import MemoryManager, MemoryConfig
+from fastagent.memory.manager import MemoryManager, MemoryConfig
 
 
 class TestMemoryManager(unittest.TestCase):

@@ -2,7 +2,7 @@ import unittest
 import time
 from unittest.mock import patch, MagicMock
 
-from src.memory.store.postgre_store import PostGreStore
+from fastagent.memory.store.postgre_store import PostGreStore
 
 
 class TestPostGreStore(unittest.TestCase):

@@ -2,7 +2,7 @@ import unittest
 import asyncio
 import tempfile
 from unittest.mock import AsyncMock, Mock, patch
-from src.protocols.mcp.client import MCPClient
+from fastagent.protocols.mcp.client import MCPClient
 
 
 class TestMCPClient(unittest.TestCase):

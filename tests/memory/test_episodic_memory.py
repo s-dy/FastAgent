@@ -5,11 +5,11 @@ import shutil
 from datetime import datetime, timedelta
 import time
 
-from src.memory.memory_types.episodic import EpisodicMemory
-from src.memory.config import MemoryConfig
-from src.memory.base import MemoryItem
-from src.memory.store import PostGreStore, MilvusVectorStore,MemoryStore
-from src.core.embeddings import EmbeddingConfig, create_embedding
+from fastagent.memory.memory_types.episodic import EpisodicMemory
+from fastagent.memory.config import MemoryConfig
+from fastagent.memory.base import MemoryItem
+from fastagent.memory.store import PostGreStore, MilvusVectorStore,MemoryStore
+from fastagent.core.embeddings import EmbeddingConfig, create_embedding
 
 
 class TestEpisodicMemoryReal(unittest.TestCase):

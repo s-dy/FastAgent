@@ -2,7 +2,7 @@ import asyncio
 import concurrent.futures
 from typing import Coroutine
 
-from src.monitor import monitor_task_status
+from fastagent.monitor import monitor_task_status
 
 
 def run_async_event(coroutine:Coroutine):

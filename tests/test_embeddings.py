@@ -3,7 +3,7 @@ os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
 from pathlib import Path
 
-from src.core.embeddings import create_embedding, EmbeddingConfig
+from fastagent.core.embeddings import create_embedding, EmbeddingConfig
 
 # 使用本地Transformer模型
 transformer_config = EmbeddingConfig(
