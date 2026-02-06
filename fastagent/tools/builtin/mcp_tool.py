@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 from fastagent.tools.base import Tool, ToolParameter
 from fastagent.tools.builtin.mcp_wrapper_tool import MCPWrappedTool
 from fastagent.protocols.mcp import MCPClient
-from utils.async_event import run_async_event
+from fastagent.utils.async_event import run_async_event
 
 
 class MCPTool(Tool):

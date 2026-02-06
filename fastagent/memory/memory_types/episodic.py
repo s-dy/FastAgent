@@ -8,7 +8,7 @@ from fastagent.core.embeddings import create_embedding, EmbeddingConfig
 from fastagent.memory.config import MemoryConfig
 from fastagent.memory.base import MemoryItem, Episode,BaseMemory
 from fastagent.monitor import monitor_task_status
-from utils.calculate import split_sentence
+from fastagent.utils.calculate import split_sentence
 
 
 class EpisodicMemory(BaseMemory):

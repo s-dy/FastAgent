@@ -276,7 +276,7 @@ class TestMCPWrappedToolIntegration(unittest.TestCase):
     """MCP包装工具集成测试"""
 
     @patch('src.protocols.mcp.client.MCPClient')
-    @patch('utils.async_event.run_async_event')
+    @patch('fastagent.utils.async_event.run_async_event')
     def test_wrapper_with_real_mcp_tool(self, mock_run_async, mock_mcp_client):
         """测试包装工具与真实MCP工具的集成"""
         # Mock MCP客户端

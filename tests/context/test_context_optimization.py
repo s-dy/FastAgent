@@ -7,7 +7,7 @@ from fastagent.context.base import ContextPacket
 from fastagent.core.message import Message
 from fastagent.tools.builtin import MemoryTool
 from fastagent.memory.config import MemoryConfig
-from utils.calculate import count_tokens
+from fastagent.utils.calculate import count_tokens
 
 
 class TestContextBuilderOptimization(unittest.TestCase):
@@ -137,7 +137,7 @@ class TestContextBuilderOptimization(unittest.TestCase):
 请基于以上信息，提供准确、有据、详细的回答。要求逻辑清晰、内容完整、语言自然。"""
 
         # 模拟token计数，让上下文超预算
-        with patch('utils.calculate.count_tokens', side_effect=[10000, 6000]):  # 原始10000, 预算6000
+        with patch('fastagent.utils.calculate.count_tokens', side_effect=[10000, 6000]):  # 原始10000, 预算6000
             compressed = self.context_builder._compress(context)
             
         # 验证压缩后仍保持基本结构
@@ -152,7 +152,7 @@ class TestContextBuilderOptimization(unittest.TestCase):
         max_tokens = 200  # 相对较小的预算
         
         # 模拟token计数
-        with patch('utils.calculate.count_tokens', return_value=1000):  # 原始1000 tokens
+        with patch('fastagent.utils.calculate.count_tokens', return_value=1000):  # 原始1000 tokens
             result = self.context_builder._truncate_text_proportional(long_text, max_tokens)
             
         # 验证结果保持多行结构且有压缩提示

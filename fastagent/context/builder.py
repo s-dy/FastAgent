@@ -23,7 +23,7 @@ from fastagent.context import ContextConfig, ContextPacket
 from fastagent.core import Message
 from fastagent.tools.builtin import MemoryTool
 from fastagent.monitor import monitor_task_status
-from utils.calculate import calculate_keyword_relevance, calculate_time_recency,count_tokens
+from fastagent.utils.calculate import calculate_keyword_relevance, calculate_time_recency,count_tokens
 
 
 @dataclass

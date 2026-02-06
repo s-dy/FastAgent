@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 
 from fastagent.memory.config import MemoryConfig
 from fastagent.memory.base import BaseStore, MemoryItem, BaseMemory
-from utils.calculate import calculate_keyword_relevance, calculate_time_recency
+from fastagent.utils.calculate import calculate_keyword_relevance, calculate_time_recency
 
 
 class WorkingMemory(BaseMemory):

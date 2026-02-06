@@ -70,7 +70,7 @@ class TestMCPToolInitialization(unittest.TestCase):
         self.assertFalse(tool_no_auto.auto_expand)
         self.assertEqual(tool_no_auto.prefix, "")
 
-    @patch('utils.async_event.run_async_event')
+    @patch('fastagent.utils.async_event.run_async_event')
     @patch('src.protocols.mcp.client.MCPClient')
     def test_tool_discovery(self, mock_mcp_client, mock_run_async):
         """测试工具发现功能"""
@@ -140,7 +140,7 @@ class TestMCPToolDescriptionGeneration(unittest.TestCase):
 class TestMCPToolRunMethod(unittest.TestCase):
     """MCP工具run方法测试"""
 
-    @patch('utils.async_event.run_async_event')
+    @patch('fastagent.utils.async_event.run_async_event')
     @patch('src.protocols.mcp.client.MCPClient')
     def test_run_list_tools(self, mock_mcp_client, mock_run_async):
         """测试列出工具功能"""
@@ -160,7 +160,7 @@ class TestMCPToolRunMethod(unittest.TestCase):
         self.assertIn("找到 2 个工具", result)
         self.assertIn("bing_search", result)
 
-    @patch('utils.async_event.run_async_event')
+    @patch('fastagent.utils.async_event.run_async_event')
     @patch('src.protocols.mcp.client.MCPClient')
     def test_run_call_tool(self, mock_mcp_client, mock_run_async):
         """测试调用工具功能"""
@@ -179,7 +179,7 @@ class TestMCPToolRunMethod(unittest.TestCase):
         self.assertIn("bing_search", result)
         self.assertIn("python", result)
 
-    @patch('utils.async_event.run_async_event')
+    @patch('fastagent.utils.async_event.run_async_event')
     @patch('src.protocols.mcp.client.MCPClient')
     def test_run_smart_action_inference(self, mock_mcp_client, mock_run_async):
         """测试智能动作推断"""
@@ -197,7 +197,7 @@ class TestMCPToolRunMethod(unittest.TestCase):
         
         self.assertIn("search", result)
 
-    @patch('utils.async_event.run_async_event')
+    @patch('fastagent.utils.async_event.run_async_event')
     @patch('src.protocols.mcp.client.MCPClient')
     def test_run_error_handling(self, mock_mcp_client, mock_run_async):
         """测试错误处理"""
@@ -208,7 +208,7 @@ class TestMCPToolRunMethod(unittest.TestCase):
         
         self.assertIn("MCP 操作失败", result)
 
-    @patch('utils.async_event.run_async_event')
+    @patch('fastagent.utils.async_event.run_async_event')
     @patch('src.protocols.mcp.client.MCPClient')
     def test_run_invalid_action(self, mock_mcp_client, mock_run_async):
         """测试无效动作处理"""

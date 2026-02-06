@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from utils.calculate import count_tokens
+from fastagent.utils.calculate import count_tokens
 
 
 @dataclass
