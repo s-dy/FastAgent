@@ -1,8 +1,11 @@
 [project]
-name = "travelagent"
+name = "fastagent"
 version = "0.1.0"
 description = "Add your description here"
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "tenacity>=9.1.2",
-]
+dependencies = []
+
+[tool.setuptools]
+# 明确列出所有包
+packages = ["fastagent"]
