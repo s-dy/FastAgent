@@ -21,11 +21,11 @@ class PostGreStore(BaseDocumentStore):
         """获取线程本地连接"""
         if not hasattr(self.local, 'connection'):
             self.local.connection = psycopg2.connect(
-                host=self.config.get('host', 'localhost'),
-                port=self.config.get('port', 5432),
-                database=self.config.get('database', 'fast_agent'),
-                user=self.config.get('user', 'postgres'),
-                password=self.config.get('password', '')
+                host=self.config.get('postgres_host', 'localhost'),
+                port=self.config.get('postgres_port', 5432),
+                database=self.config.get('postgres_database', 'fast_agent'),
+                user=self.config.get('postgres_user', 'postgres'),
+                password=self.config.get('postgres_password', '123456')
             )
         return self.local.connection
 

@@ -20,9 +20,9 @@ class MilvusVectorStore:
     def __new__(cls, *args, **kwargs):
         """获取或创建Milvus实例（单例模式）"""
         # 创建唯一键
-        host = kwargs.get("host", "localhost")
-        port = kwargs.get("port", "19530")
-        collection_name = kwargs.get("collection_name", "fast_agents_vectors")
+        host = kwargs.get("config", {}).get("milvus_host", "localhost")
+        port = kwargs.get("config", {}).get("milvus_port", 19530)
+        collection_name = kwargs.get("config", {}).get("milvus_collection_name", "fast_agents_vectors")
         key = (host, port, collection_name)
 
         if key not in cls._instances:
@@ -32,34 +32,16 @@ class MilvusVectorStore:
 
     def __init__(
             self,
-            host: str = "localhost",
-            port: int = 19530,
-            collection_name: str = "fast_agents_vectors",
-            vector_size: int = 1024,
-            metric_type: str = "IP",
+            config: Dict[str, Any] = None,
             **kwargs
     ):
         """
         初始化Milvus向量存储
-
-        Args:
-            host: Milvus服务主机地址
-            port: Milvus服务端口
-            collection_name: 集合名称
-            vector_size: 向量维度
-            metric_type: 距离度量方式 (IP, L2, COSINE)
         """
-        self.host = host
-        self.port = port
-        self.collection_name = collection_name
-        self.vector_size = vector_size
-        self.metric_type = metric_type.upper()
-
-        # 索引参数
-        self.index_type = kwargs.get("index_type", "HNSW")
-        self.ef_construction = kwargs.get("ef_construction", 360)
-        self.M = kwargs.get("M", 32)
-        self.ef_search = kwargs.get("ef_search", 128)
+        self.config = config
+        self.host = config.get("milvus_host", "localhost")
+        self.port = config.get("milvus_port", 19530)
+        self.collection_name = config.get("milvus_collection_name", "fast_agents_vectors")
 
         # 初始化客户端
         self.collection = None
@@ -103,7 +85,7 @@ class MilvusVectorStore:
                     FieldSchema(
                         name="vector",
                         dtype=DataType.FLOAT_VECTOR,
-                        dim=self.vector_size
+                        dim=self.config.get("milvus_vector_size", 1024)
                     ),
                     FieldSchema(
                         name="memory_type",
@@ -195,11 +177,11 @@ class MilvusVectorStore:
 
             # 创建索引
             index_params = {
-                "index_type": self.index_type,
-                "metric_type": self.metric_type,
+                "index_type": self.config.get("milvus_index_type", "HNSW").upper(),
+                "metric_type": self.config.get("milvus_metric_type", "IP").upper(),
                 "params": {
-                    "M": self.M,
-                    "efConstruction": self.ef_construction
+                    "M": self.config.get("milvus_M", 32),
+                    "efConstruction": self.config.get("milvus_ef_construction", 360),
                 }
             }
 
@@ -240,8 +222,8 @@ class MilvusVectorStore:
 
         # 填充数据
         for i, (vector, meta, point_id) in enumerate(zip(vectors, metadata, ids)):
-            if len(vector) != self.vector_size:
-                monitor_task_status(f"⚠️ 向量维度不匹配: 期望{self.vector_size}, 实际{len(vector)}")
+            if len(vector) != self.config.get("milvus_vector_size", 1024):
+                monitor_task_status(f"⚠️ 向量维度不匹配")
                 continue
 
             # 添加时间戳到元数据
@@ -299,14 +281,14 @@ class MilvusVectorStore:
         Returns:
             List[Dict]: 搜索结果
         """
-        if len(query_vector) != self.vector_size:
-            monitor_task_status(f"❌ 查询向量维度错误: 期望{self.vector_size}, 实际{len(query_vector)}",level='ERROR')
+        if len(query_vector) != self.config.get("milvus_vector_size", 1024):
+            monitor_task_status(f"❌ 查询向量维度错误",level='ERROR')
             return []
 
         # 构建搜索参数
         search_params = {
-            "metric_type": self.metric_type,
-            "params": {"ef": self.ef_search}
+            "metric_type": self.config.get("milvus_metric_type", "IP").upper(),
+            "params": {"ef": self.config.get("milvus_ef_search", 128)}
         }
 
         # 构建表达式
@@ -446,9 +428,9 @@ class MilvusVectorStore:
             info = {
                 "name": self.collection_name,
                 "entities_count": stats,
-                "vector_size": self.vector_size,
-                "metric_type": self.metric_type,
-                "index_type": self.index_type
+                "vector_size": self.config.get("milvus_vector_size", 1024),
+                "metric_type": self.config.get("milvus_metric_type", "IP").upper(),
+                "index_type": self.config.get("milvus_index_type", "HNSW").upper(),
             }
 
             return info

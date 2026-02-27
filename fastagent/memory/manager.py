@@ -27,8 +27,8 @@ class MemoryManager:
             self.memory_types['working'] = WorkingMemory(self.config, MemoryStore())
 
         if self.config.enable_episodic:
-            postgres_store = PostGreStore({})
-            milvus_vector_store = MilvusVectorStore()
+            postgres_store = PostGreStore(self.config.model_dump())
+            milvus_vector_store = MilvusVectorStore(self.config.model_dump())
             self.memory_types['episodic'] = EpisodicMemory(self.config, MemoryStore(), postgres_store, milvus_vector_store)
 
         if self.config.enable_semantic:
@@ -55,8 +55,10 @@ class MemoryManager:
         Returns:
             记忆ID
         """
+        if not metadata:
+            metadata = {}
         if not metadata.get('user_id'):
-            raise Exception('添加记忆需要指定user_id')
+            metadata['user_id'] = self.user_id
         # 计算重要性
         if importance is None:
             importance = self._calculate_importance(content, metadata)

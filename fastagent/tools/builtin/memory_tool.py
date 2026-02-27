@@ -27,14 +27,6 @@ class MemoryTool(Tool):
             description="记忆工具"
         )
 
-        # 初始化记忆管理器
-        self.memory_config = config or MemoryConfig()
-
-        self.memory_manager = MemoryManager(
-            user_id=user_id,
-            config=self.memory_config,
-        )
-
     def run(self, parameters: Dict[str, Any]) -> str:
         action = parameters.get("action")
         kwargs = {k: v for k, v in parameters.items() if k != "action"}

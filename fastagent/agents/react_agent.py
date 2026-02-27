@@ -70,7 +70,7 @@ class ReactAgent(Agent):
         for tool in self.tool_registry.get_all_tools():
             schema = tool.to_openai_schema()
             schemas.append(schema)
-        return schemas
+        return schemas or None
 
     @staticmethod
     def _parse_function_call_arguments(arguments: Optional[str]) -> dict[str, Any]:
@@ -180,18 +180,10 @@ class ReactAgent(Agent):
         self.state.add_message(AIMessage(final_response))
         return final_response
 
-    def add_tool(self, tool: Union[MCPTool,Tool]) -> None:
+    def add_tool(self, tool: Tool) -> None:
         """便捷方法：将工具注册到当前Agent"""
         if not self.tool_registry:
             self.tool_registry = ToolRegistry()
-
-        if hasattr(tool, "auto_expand") and getattr(tool, "auto_expand"):
-            expanded_tools = tool.get_expanded_tools()
-            if expanded_tools:
-                for expanded_tool in expanded_tools:
-                    self.tool_registry.register_tool(expanded_tool)
-                monitor_task_status(f"✅ MCP工具 '{tool.name}' 已展开为 {len(expanded_tools)} 个独立工具")
-                return
 
         self.tool_registry.register_tool(tool)
 

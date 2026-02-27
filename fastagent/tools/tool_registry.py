@@ -1,7 +1,8 @@
 from typing import Any, Callable, Optional
 
-from fastagent.tools.base import Tool, ToolParameter
+from fastagent.tools.base import Tool
 from fastagent.monitor import monitor_task_status
+from fastagent.tools.builtin import MCPTool
 
 
 class ToolRegistry:
@@ -12,10 +13,20 @@ class ToolRegistry:
 
     def register_tool(self, tool:Tool):
         """注册工具"""
-        if tool.name in self.tools:
-            monitor_task_status(f"⚠️ 警告:工具 '{tool.name}' 已存在，将被覆盖。", level="WARNING")
-        self.tools[tool.name] = tool
-        monitor_task_status(f"成功注册工具 '{tool.name}'")
+        tools = []
+        if isinstance(tool,MCPTool) and hasattr(tool, "auto_expand") and getattr(tool, "auto_expand"):
+            expanded_tools = tool.get_expanded_tools()
+            if expanded_tools:
+                tools.extend(expanded_tools)
+                monitor_task_status(f"✅ MCP工具 '{tool.name}' 已展开为 {len(expanded_tools)} 个独立工具")
+        else:
+            tools.append(tool)
+
+        for tool in tools:
+            if tool.name in self.tools:
+                monitor_task_status(f"⚠️ 警告:工具 '{tool.name}' 已存在，将被覆盖。", level="WARNING")
+            self.tools[tool.name] = tool
+            monitor_task_status(f"成功注册工具 '{tool.name}'")
 
     def register_function(self,function:Callable):
         """直接注册函数作为工具"""

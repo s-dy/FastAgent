@@ -1,6 +1,3 @@
-"""
-情景记忆负责存储具体的事件和经历，它的设计重点在于保持事件的完整性和时间序列关系。情景记忆采用了SQLite+Qdrant的混合存储方案，SQLite负责结构化数据的存储和复杂查询，Qdrant负责高效的向量检索。
-"""
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 

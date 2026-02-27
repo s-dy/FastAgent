@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 
 from fastagent.agents import Agent, MessageState
 from fastagent.core import LLMClient, Config, HumanMessage, AIMessage
@@ -18,6 +18,9 @@ DEFAULT_COORDINATOR_PROMPT = """
 
 可用的执行者及其专长:
 {executors_info}
+
+一定要注意：
+1. 严格按照可用的执行者分配，不要编造执行者。
 
 请严格按照以下JSON格式输出你的任务分配计划:
 ```json
@@ -155,6 +158,7 @@ class Executor:
         monitor_task_status(f"✅ 执行者 [{self.name}] 任务完成")
         return result
 
+
 class MultiAgent(Agent):
     """
     多智能体协作
@@ -168,7 +172,7 @@ class MultiAgent(Agent):
             state: MessageState,
             system_prompt: Optional[str] = None,
             config: Optional[Config] = None,
-            executors: Optional[List[Executor]] = None,
+            executors: Optional[List[Union[Executor,Agent]]] = None,
     ):
         """
         初始化MultiAgent
@@ -182,13 +186,13 @@ class MultiAgent(Agent):
         super().__init__(name, llm, system_prompt, config)
         self.state = state
         self.coordinator = Coordinator(llm)
-        self.executors: dict[str, Executor] = {}
+        self.executors: dict[str, Union[Executor,Agent]] = {}
 
         if executors:
             for executor in executors:
                 self.register_executor(executor)
 
-    def register_executor(self, executor: Executor):
+    def register_executor(self, executor: Union[Executor,Agent]):
         """
         注册执行者
         :param executor: 执行者
@@ -249,11 +253,17 @@ class MultiAgent(Agent):
                         results[task_id] = f"Error: 未找到执行者 {executor_name}"
                     else:
                         executor = self.executors[executor_name]
-                        results[task_id] = executor.execute(
-                            task["description"],
-                            context,
-                            **kwargs
-                        )
+                        if isinstance(executor, Executor):
+                            results[task_id] = executor.execute(
+                                task["description"],
+                                context=context,
+                                **kwargs
+                            )
+                        else:
+                            results[task_id] = executor.run(
+                                task["description"],
+                                **kwargs
+                            )
 
                     executed.add(task_id)
                     progress_made = True
