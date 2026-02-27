@@ -4,9 +4,8 @@ from dotenv import load_dotenv
 from fastagent.core import LLMClient
 from fastagent.memory import MemoryConfig, MemoryManager
 
-from app.agents.planner import PlannerAgent
-from app.models import TripPlanRequest,Budget,Meal,Hotel,Location
-
+from app.agents import PlannerAgent
+from app.models import TripPlanRequest
 
 load_dotenv()
 
@@ -18,6 +17,7 @@ memory_manager = MemoryManager(
         enable_episodic=True,
         enable_semantic=False,
         enable_perceptual=False,
+        milvus_collection_name="travel_agent_test",
     )
 )
 

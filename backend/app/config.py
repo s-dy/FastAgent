@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     BCRYPT_ROUNDS: int = 12
 
     # 向量数据库配置
-    VECTOR_MEMORY_DIR: str = "vector_memory"
+    MILVUS_HOST: str = "localhost"
+    MILVUS_PORT: int = 19530
+    MILVUS_COLLECTION_NAME: str = "travel_agent"
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     VECTOR_DIM: int = 384
 

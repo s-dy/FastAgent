@@ -225,8 +225,8 @@ import os
 from dotenv import load_dotenv
 from fastagent.core import LLMClient
 from fastagent.memory import MemoryConfig, MemoryManager
-from app.agents.planner import PlannerAgent
-from app.models import TripPlanRequest
+from backend.app import PlannerAgent
+from backend.app import TripPlanRequest
 
 load_dotenv()
 
@@ -283,7 +283,7 @@ print(response.model_dump_json(indent=2))
 | 错误隔离 | 一次失败全部失败 | 某天某 Agent 失败不影响其他天 |
 | 预算准确性 | LLM 计算，容易出错 | 程序化计算，100% 准确 |
 
-> 详细分析见 [`docs/token超限问题.md`](docs/token超限问题.md)
+> 详细分析见 [`docs/token超限问题.md`](../docs/token超限问题.md)
 
 ### 地理位置验证
 

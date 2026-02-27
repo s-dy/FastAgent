@@ -1,7 +1,7 @@
 import json
 import math
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Dict, Any
 
@@ -862,7 +862,6 @@ class PlannerAgent:
                     "preferences": request.preferences,
                     "hotel_preferences": request.hotel_preferences,
                     "budget": request.budget,
-                    "trip_title": validated_plan.trip_title,
                 }),
             )
 
