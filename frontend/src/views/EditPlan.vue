@@ -252,6 +252,7 @@ import { ElMessage } from 'element-plus'
 import { Plus, Location, Rank, Delete, RefreshRight } from '@element-plus/icons-vue'
 import MapView from '@/components/MapView.vue'
 import type { TripPlanResponse, DailyPlan, Attraction, Dining, Hotel, MapPoint } from '@/types'
+import { sanitizeTripPlan } from '@/utils/tripDataAdapter'
 
 const router = useRouter()
 const editablePlan = ref<TripPlanResponse | null>(null)
@@ -263,9 +264,20 @@ const draggedPos = ref<{ dayIndex: number; attrIndex: number } | null>(null)
 // 加载行程数据
 onMounted(() => {
   const state = history.state as { tripPlan?: TripPlanResponse }
+  let rawPlan: any = null
+
   if (state?.tripPlan) {
-    // 深拷贝避免直接修改原数据
-    editablePlan.value = JSON.parse(JSON.stringify(state.tripPlan))
+    rawPlan = JSON.parse(JSON.stringify(state.tripPlan))
+  } else {
+    const savedPlan = sessionStorage.getItem('currentTripPlan')
+    if (savedPlan) {
+      rawPlan = JSON.parse(savedPlan)
+    }
+  }
+
+  if (rawPlan) {
+    // 适配后端字段名差异（dining→dinings, hotels→recommended_hotel, 坐标格式等）
+    editablePlan.value = sanitizeTripPlan(rawPlan)
 
     // 初始化备注和实际花费字段（如果不存在）
     editablePlan.value.days.forEach(day => {
@@ -274,19 +286,6 @@ onMounted(() => {
         attraction.actual_cost = attraction.actual_cost || undefined
       })
     })
-  } else {
-    const savedPlan = sessionStorage.getItem('currentTripPlan')
-    if (savedPlan) {
-      editablePlan.value = JSON.parse(savedPlan)
-
-      // 初始化备注和实际花费字段
-      editablePlan.value.days.forEach(day => {
-        day.attractions.forEach(attraction => {
-          attraction.notes = attraction.notes || ''
-          attraction.actual_cost = attraction.actual_cost || undefined
-        })
-      })
-    }
   }
 })
 

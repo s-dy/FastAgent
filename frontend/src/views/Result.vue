@@ -307,6 +307,7 @@ import MapView from '@/components/MapView.vue'
 import BudgetSummary from '@/components/BudgetSummary.vue'
 import ExportButtons from '@/components/ExportButtons.vue'
 import type { TripPlanResponse, MapPoint, Location as LocationType } from '@/types'
+import { sanitizeTripPlan } from '@/utils/tripDataAdapter'
 
 const router = useRouter()
 const contentRef = ref<HTMLElement>()
@@ -326,36 +327,7 @@ const tips = [
   '尊重当地文化和习俗，做文明游客'
 ]
 
-// 数据清理函数，确保经纬度是数字
-const sanitizeTripPlan = (plan: TripPlanResponse): TripPlanResponse => {
-  plan.days.forEach(day => {
-    day.attractions.forEach(attraction => {
-      if (attraction.location) {
-        attraction.location.lat = parseFloat(attraction.location.lat as any)
-        attraction.location.lng = parseFloat(attraction.location.lng as any)
-      }
-    })
-    day.dinings.forEach(dining => {
-      if (dining.location) {
-        dining.location.lat = parseFloat(dining.location.lat as any)
-        dining.location.lng = parseFloat(dining.location.lng as any)
-      }
-    })
-    if (day.recommended_hotel?.location) {
-      day.recommended_hotel.location.lat = parseFloat(day.recommended_hotel.location.lat as any)
-      day.recommended_hotel.location.lng = parseFloat(day.recommended_hotel.location.lng as any)
-    }
-  })
-  if (plan.hotels) {
-    plan.hotels.forEach(hotel => {
-      if (hotel.location) {
-        hotel.location.lat = parseFloat(hotel.location.lat as any)
-        hotel.location.lng = parseFloat(hotel.location.lng as any)
-      }
-    })
-  }
-  return plan
-}
+// sanitizeTripPlan 已提取到 @/utils/tripDataAdapter 中复用
 
 // 获取行程数据
 onMounted(() => {
