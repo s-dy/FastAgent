@@ -1,0 +1,444 @@
+{
+  "bundleRatesAvailable": false,
+  "cardLabels": [],
+  "descriptionSummary": null,
+  "bookerExperienceContentUIComponentProps": [],
+  "geniusInfo": null,
+  "nbWishlists": 0,
+  "acceptsWalletCredit": false,
+  "nonMatchingFlexibleFilterOptions": [],
+  "blocks": [
+      {
+          "mealPlanIncluded": null,
+          "hasCrib": false,
+          "thirdPartyInventoryContext": {
+              "__typename": "ThirdPartyInventoryContext",
+              "isTpiBlock": false
+          },
+          "finalPrice": {
+              "__typename": "Price",
+              "currency": "CNY",
+              "amount": 729.0
+          },
+          "blockMatchTags": {
+              "__typename": "BlockMatchTags",
+              "freeStayChildrenAges": [],
+              "childStaysForFree": false
+          },
+          "freeCancellationUntil": null,
+          "__typename": "Block",
+          "originalPrice": {
+              "amount": 729.0,
+              "currency": "CNY",
+              "__typename": "Price"
+          },
+          "blockId": {
+              "mealPlanId": 34,
+              "bundleId": 0,
+              "policyGroupId": "244931741",
+              "roomId": "27087401",
+              "packageId": "0",
+              "occupancy": 2,
+              "__typename": "BlockId"
+          },
+          "onlyXLeftMessage": {
+              "variables": [],
+              "__typename": "TranslationTag",
+              "translation": "该价格的客房在我们网站上仅剩6间",
+              "tag": null
+          }
+      }
+  ],
+  "showGeniusLoginMessage": false,
+  "personalizedSummary": {
+      "languageCode": "",
+      "segment": "",
+      "summary": "",
+      "reviewsCount": 0,
+      "__typename": "PersonalizedReviewSummary"
+  },
+  "propertyCribsAvailabilityLabel": null,
+  "customBadges": {
+      "showBhTravelCreditBadge": false,
+      "showSkiToDoor": false,
+      "showOnlineCheckinBadge": null,
+      "__typename": "CustomBadges"
+  },
+  "visibilityBoosterEnabled": null,
+  "persuasion": {
+      "__typename": "SearchResultPersuasion",
+      "highlighted": false,
+      "sponsoredAdsData": null,
+      "nativeAdsCpc": null,
+      "showNativeAdLabel": false,
+      "autoextended": false,
+      "nativeAdsTracking": null,
+      "preferredPlus": false,
+      "nativeAdId": null,
+      "geniusRateAvailable": false,
+      "preferred": true
+  },
+  "displayName": {
+      "__typename": "TextWithTranslationTag",
+      "translationTag": {
+          "translation": null,
+          "__typename": "TranslationTag"
+      },
+      "text": "北京方恒假日酒店 "
+  },
+  "isNewlyOpened": false,
+  "seoThemes": [],
+  "description": null,
+  "basicPropertyData": {
+      "location": {
+          "longitude": 116.481308877119,
+          "latitude": 39.9897973260725,
+          "__typename": "Location",
+          "city": "Beijing",
+          "address": "Building 3 No 6 Futong East Avenue Wanjing",
+          "countryCode": "cn"
+      },
+      "pageName": "holiday-inn-beijing-focus-square",
+      "accommodationTypeId": 204,
+      "paymentConfig": {
+          "__typename": "PaymentConfig",
+          "installments": null
+      },
+      "isClosed": false,
+      "externalReviewScore": null,
+      "isTestProperty": false,
+      "starRating": {
+          "__typename": "StarRating",
+          "value": 5.0,
+          "tocLink": {
+              "translation": null,
+              "__typename": "TranslationTag"
+          },
+          "symbol": "DOTS",
+          "showAdditionalInfoIcon": false,
+          "caption": {
+              "translation": "此评级是根据该住宿的房价、设施和服务综合评定而出，仅供参考。",
+              "__typename": "TranslationTag"
+          }
+      },
+      "__typename": "BasicPropertyData",
+      "ufi": -1898541,
+      "photos": {
+          "main": {
+              "highResJpegUrl": {
+                  "__typename": "PhotoResource",
+                  "relativeUrl": "/xdata/images/hotel/square600/309477754.jpg?k=2669ef2839d53dd2e6ec0ac5772528e64ce570dd8d8f131613ef4b5f6982805e&o="
+              },
+              "__typename": "Photo",
+              "lowResJpegUrl": {
+                  "__typename": "PhotoResource",
+                  "relativeUrl": "/xdata/images/hotel/square240/309477754.jpg?k=2669ef2839d53dd2e6ec0ac5772528e64ce570dd8d8f131613ef4b5f6982805e&o="
+              },
+              "lowResUrl": {
+                  "relativeUrl": "/xdata/images/hotel/square240/309477754.webp?k=1d57d1b5d8bc343ca88a3b750df1aad5a3493ada3baac34e01ea0b3fa63f4716&o=",
+                  "__typename": "PhotoResource"
+              },
+              "tags": [
+                  {
+                      "id": 3,
+                      "__typename": "PhotoTag"
+                  }
+              ],
+              "highResUrl": {
+                  "__typename": "PhotoResource",
+                  "relativeUrl": "/xdata/images/hotel/square600/309477754.webp?k=1d57d1b5d8bc343ca88a3b750df1aad5a3493ada3baac34e01ea0b3fa63f4716&o="
+              }
+          },
+          "__typename": "PropertyPhotos"
+      },
+      "reviewScore": {
+          "secondaryScore": 0.0,
+          "secondaryTextTag": {
+              "__typename": "TranslationTag",
+              "translation": null
+          },
+          "score": 8.9,
+          "totalScoreTextTag": {
+              "translation": "很棒",
+              "__typename": "TranslationTag"
+          },
+          "__typename": "Reviews",
+          "showScore": true,
+          "showSecondaryScore": false,
+          "reviewCount": 454
+      },
+      "id": 270874
+  },
+  "policies": {
+      "showFreeCancellation": false,
+      "showNoPrepayment": true,
+      "showPetsAllowedForFree": false,
+      "enableJapaneseUsersSpecialCase": null,
+      "__typename": "Policies"
+  },
+  "propertyUspBadges": [
+      {
+          "facilityId": 195,
+          "__typename": "UspBadge",
+          "name": "heated_pool",
+          "translatedName": "恒温泳池"
+      }
+  ],
+  "hostTraderLabel": "PROFESSIONAL",
+  "topPhotos": [],
+  "recommendedDate": {
+      "__typename": "RecommendedDate",
+      "checkin": "",
+      "checkout": "",
+      "lengthOfStay": 0
+  },
+  "licenseDetails": null,
+  "needsProfileNeeds": null,
+  "mlBookingHomeTags": null,
+  "location": {
+      "skiLiftDistance": null,
+      "mainDistance": null,
+      "nearbyBeachNames": [],
+      "displayLocation": "朝阳区, 北京",
+      "nearbyUsNaturalParkText": null,
+      "__typename": "SearchResultsPropertyLocation",
+      "geoDistanceMeters": null,
+      "isCentrallyLocated": false,
+      "publicTransportDistanceDescription": null,
+      "mainDistanceDescription": null,
+      "beachWalkingTime": null,
+      "popularFreeDistrictName": "望京区",
+      "beachDistance": null,
+      "isWithinBestLocationScoreArea": false
+  },
+  "propertySustainability": {
+      "isSustainable": false,
+      "__typename": "SrPropertySustainability",
+      "certifications": null
+  },
+  "ribbon": null,
+  "badges": [],
+  "soldOutInfo": {
+      "messages": [],
+      "__typename": "SoldOutInfo",
+      "alternativeDatesMessages": [],
+      "isSoldOut": false
+  },
+  "matchingUnitConfigurations": {
+      "__typename": "MatchingUnitConfigurations",
+      "unitConfigurations": [
+          {
+              "nbBedrooms": 0,
+              "bedConfigurations": [
+                  {
+                      "beds": [
+                          {
+                              "count": 2,
+                              "__typename": "Bed",
+                              "type": 1
+                          }
+                      ],
+                      "nbAllBeds": 2,
+                      "__typename": "BedConfiguration"
+                  },
+                  {
+                      "nbAllBeds": 1,
+                      "beds": [
+                          {
+                              "count": 1,
+                              "type": 3,
+                              "__typename": "Bed"
+                          }
+                      ],
+                      "__typename": "BedConfiguration"
+                  }
+              ],
+              "__typename": "UnitConfiguration",
+              "unitTypeNames": [],
+              "name": "标准间",
+              "unitId": 27087401,
+              "nbLivingrooms": 0,
+              "nbAllBeds": 2,
+              "apartmentRooms": [],
+              "nbBathrooms": 0,
+              "localizedArea": null,
+              "nbUnits": 1,
+              "unitTypeId": 9,
+              "nbKitchens": 0
+          }
+      ],
+      "commonConfiguration": {
+          "unitId": 0,
+          "name": null,
+          "unitTypeNames": [],
+          "nbBedrooms": 0,
+          "bedConfigurations": [
+              {
+                  "beds": [
+                      {
+                          "type": 1,
+                          "__typename": "Bed",
+                          "count": 2
+                      }
+                  ],
+                  "nbAllBeds": 2,
+                  "__typename": "BedConfiguration"
+              },
+              {
+                  "beds": [
+                      {
+                          "count": 1,
+                          "type": 3,
+                          "__typename": "Bed"
+                      }
+                  ],
+                  "nbAllBeds": 1,
+                  "__typename": "BedConfiguration"
+              }
+          ],
+          "__typename": "UnitConfiguration",
+          "nbUnits": 1,
+          "nbKitchens": 0,
+          "nbAllBeds": 2,
+          "nbBathrooms": 0,
+          "localizedArea": null,
+          "nbLivingrooms": 0
+      }
+  },
+  "priceDisplayInfoIrene": {
+      "excludedCharges": {
+          "excludeChargesList": [
+              {
+                  "amountPerStay": {
+                      "amountRounded": "73元",
+                      "amountUnformatted": 72.9000000000001,
+                      "currency": "CNY",
+                      "amount": "72.90元",
+                      "__typename": "PriceDisplayIrene"
+                  },
+                  "__typename": "ChargeDisplayIrene",
+                  "chargeType": 0,
+                  "chargeMode": "PERCENTAGE",
+                  "chargeInclusion": "EXCLUDED"
+              },
+              {
+                  "amountPerStay": {
+                      "__typename": "PriceDisplayIrene",
+                      "amountRounded": "48元",
+                      "amountUnformatted": 48.1140000000001,
+                      "currency": "CNY",
+                      "amount": "48.11元"
+                  },
+                  "__typename": "ChargeDisplayIrene",
+                  "chargeMode": "PERCENTAGE",
+                  "chargeType": 21,
+                  "chargeInclusion": "EXCLUDED"
+              }
+          ],
+          "excludeChargesAggregated": {
+              "amountPerStay": {
+                  "amountUnformatted": 121.014,
+                  "currency": "CNY",
+                  "amountRounded": "121元",
+                  "amount": "121.01元",
+                  "__typename": "PriceDisplayIrene"
+              },
+              "__typename": "PriceDisplayAggregatedIrene",
+              "copy": {
+                  "translation": null,
+                  "__typename": "TranslationTag"
+              }
+          },
+          "__typename": "ExcludeChargesIrene"
+      },
+      "averagePricePerNight": {
+          "__typename": "PriceDisplayIrene",
+          "amountUnformatted": 0.0,
+          "currency": "",
+          "amountRounded": "",
+          "amount": ""
+      },
+      "chargesInfo": {
+          "translation": "+121元税费及其他费用",
+          "__typename": "TranslationTag"
+      },
+      "badges": [],
+      "discounts": [],
+      "serverTranslations": [],
+      "useRoundedAmount": false,
+      "rewards": {
+          "rewardsList": [],
+          "__typename": "RewardsIrene",
+          "rewardsAggregated": {
+              "__typename": "PriceDisplayAggregatedIrene",
+              "amountPerStay": {
+                  "amount": "",
+                  "currency": "",
+                  "amountUnformatted": 0.0,
+                  "amountRounded": "",
+                  "__typename": "PriceDisplayIrene"
+              },
+              "copy": {
+                  "translation": null,
+                  "__typename": "TranslationTag"
+              }
+          }
+      },
+      "priceBeforeDiscount": {
+          "copy": {
+              "__typename": "TranslationTag",
+              "translation": null
+          },
+          "amountPerStay": {
+              "__typename": "PriceDisplayIrene",
+              "amountRounded": "",
+              "currency": "",
+              "amountUnformatted": 0.0,
+              "amount": ""
+          },
+          "__typename": "PriceDisplayAggregatedIrene"
+      },
+      "taxExceptions": [],
+      "displayPrice": {
+          "copy": {
+              "__typename": "TranslationTag",
+              "translation": "总共"
+          },
+          "amountPerStay": {
+              "amount": "729元",
+              "amountUnformatted": 729,
+              "currency": "CNY",
+              "amountRounded": "729元",
+              "__typename": "PriceDisplayIrene"
+          },
+          "amountPerStayHotelCurr": null,
+          "__typename": "PriceDisplayAggregatedIrene"
+      },
+      "__typename": "PriceDisplayInfoIrene",
+      "displayConfig": [
+          {
+              "value": false,
+              "__typename": "PriceDisplayConfigItemIrene",
+              "key": "use_nightly_prices"
+          },
+          {
+              "value": false,
+              "__typename": "PriceDisplayConfigItemIrene",
+              "key": "use_nightly_as_dominant"
+          },
+          {
+              "value": true,
+              "__typename": "PriceDisplayConfigItemIrene",
+              "key": "use_js_tracking"
+          }
+      ]
+  },
+  "trackOnView": [],
+  "mealPlanIncluded": null,
+  "generatedPropertyTitle": "",
+  "relocationMode": null,
+  "personalizedPhotos": [],
+  "isTpiExclusiveProperty": false,
+  "showAdLabel": false,
+  "__typename": "SearchResultProperty"
+}
