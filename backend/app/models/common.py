@@ -45,11 +45,13 @@ class Hotel(BaseModel):
 
 class Budget(BaseModel):
     """预算信息"""
-    attraction_ticket_cost: float = Field(default=0,description="景点门票总费用")
-    hotel_cost: float = Field(default=0,description="酒店总费用")
-    dining_cost: float = Field(default=0,description="餐饮总费用")
-    transport_cost: float = Field(default=0,description="交通总费用")
-    total: float = Field(default=0,description="总费用")
+    attraction_ticket_cost: float = Field(default=0, description="景点门票总费用")
+    hotel_cost: float = Field(default=0, description="酒店总费用")
+    dining_cost: float = Field(default=0, description="餐饮总费用")
+    transport_cost: float = Field(default=0, description="交通总费用")
+    total: float = Field(default=0, description="总费用")
+    budget_level: Optional[str] = Field(default=None, description="预算等级（经济/中等/豪华）")
+    is_over_budget: bool = Field(default=False, description="是否超出预算上限")
 
 
 class WeatherInfo(BaseModel):

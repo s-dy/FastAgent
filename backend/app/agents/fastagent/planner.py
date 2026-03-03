@@ -16,7 +16,7 @@ from app.models.trip import TripPlanRequest, TripPlanResponse, DailyPlan
 from app.observability.logger import default_logger as logger
 from app.config import settings
 from app.services.context_manager import ContextManager, get_context_manager
-from app.agents.agents import (
+from app.agents.fastagent.agents import (
     AttractionSearchAgent,
     WeatherQueryAgent,
     DailyAttractionPlanAgent,
@@ -66,6 +66,50 @@ TRANSPORT_COST_PER_DAY = {
     "中等": 60.0,
     "适中": 60.0,
     "豪华": 150.0,
+}
+
+# 每公里交通费用估算（用于基于距离的动态计算）
+TRANSPORT_COST_PER_KM = {
+    "经济": 1.5,   # 公交/地铁为主
+    "中等": 3.0,   # 打车为主
+    "适中": 3.0,
+    "豪华": 6.0,   # 专车/包车
+}
+
+# 预算等级对应的具体价格范围
+BUDGET_RANGES = {
+    "经济": {
+        "hotel_range": "100-300元/晚",
+        "hotel_max": 300,
+        "dining_per_meal": "20-50元/人",
+        "dining_meal_max": 50,
+        "daily_total_max": 500,
+        "description": "以经济实惠为主，选择性价比高的选项",
+    },
+    "中等": {
+        "hotel_range": "300-600元/晚",
+        "hotel_max": 600,
+        "dining_per_meal": "50-100元/人",
+        "dining_meal_max": 100,
+        "daily_total_max": 1000,
+        "description": "兼顾品质与价格，选择舒适但不奢华的选项",
+    },
+    "适中": {
+        "hotel_range": "300-600元/晚",
+        "hotel_max": 600,
+        "dining_per_meal": "50-100元/人",
+        "dining_meal_max": 100,
+        "daily_total_max": 1000,
+        "description": "兼顾品质与价格，选择舒适但不奢华的选项",
+    },
+    "豪华": {
+        "hotel_range": "600-1500元/晚",
+        "hotel_max": 1500,
+        "dining_per_meal": "100-300元/人",
+        "dining_meal_max": 300,
+        "daily_total_max": 2500,
+        "description": "追求高品质体验，选择高档酒店和特色餐厅",
+    },
 }
 
 
@@ -166,16 +210,21 @@ class PlannerAgent:
         assigned_attraction_names: List[str],
         weather_text: str,
         preferences: List[str],
+        budget_level: str = "中等",
     ) -> str:
         """构建单日景点规划的 prompt"""
         assigned_str = "、".join(assigned_attraction_names) if assigned_attraction_names else "无"
         pref_str = "、".join(preferences) if preferences else "无特殊偏好"
+        budget_info = BUDGET_RANGES.get(budget_level, BUDGET_RANGES["中等"])
         return (
             f"请为前往 {destination} 旅行的第 {day_num} 天规划景点。\n\n"
             f"**用户偏好：** {pref_str}\n"
+            f"**预算水平：** {budget_level}（{budget_info['description']}）\n"
+            f"**每日总预算上限：** {budget_info['daily_total_max']}元/天\n"
             f"**当天天气：** {weather_text}\n"
             f"**已在其他天分配的景点（不要重复推荐）：** {assigned_str}\n\n"
             f"**候选景点列表（从以下景点中挑选）：**\n{raw_attractions}\n\n"
+            f"请优先选择门票价格与预算水平匹配的景点。\n"
             f"请严格按照系统提示中的 JSON 格式输出。"
         )
 
@@ -189,12 +238,16 @@ class PlannerAgent:
     ) -> str:
         """构建单日酒店规划的 prompt（Agent 将动态搜索附近酒店）"""
         hotel_pref_str = "、".join(hotel_preferences) if hotel_preferences else "无特殊偏好"
+        budget_info = BUDGET_RANGES.get(budget_level, BUDGET_RANGES["中等"])
         return (
             f"请为前往 {destination} 旅行的第 {day_num} 天搜索并推荐酒店。\n\n"
-            f"**预算水平：** {budget_level}\n"
+            f"**预算水平：** {budget_level}（{budget_info['description']}）\n"
+            f"**酒店价格范围：** {budget_info['hotel_range']}\n"
+            f"**酒店价格上限：** {budget_info['hotel_max']}元/晚\n"
             f"**酒店偏好：** {hotel_pref_str}\n"
             f"**当天景点位置参考：** {day_attractions_summary}\n\n"
-            f"请根据以上景点位置，使用工具搜索这些景点附近的酒店，然后从搜索结果中挑选最合适的一家。\n"
+            f"请根据以上景点位置，使用工具搜索这些景点附近的酒店，然后从搜索结果中挑选价格在 {budget_info['hotel_range']} 范围内最合适的一家。\n"
+            f"**重要：推荐的酒店 estimated_cost 必须不超过 {budget_info['hotel_max']} 元/晚。**\n"
             f"搜索完成后，请严格按照系统提示中的 JSON 格式输出。"
         )
 
@@ -208,12 +261,16 @@ class PlannerAgent:
     ) -> str:
         """构建单日餐饮规划的 prompt"""
         assigned_str = "、".join(assigned_dining_names) if assigned_dining_names else "无"
+        budget_info = BUDGET_RANGES.get(budget_level, BUDGET_RANGES["中等"])
         return (
             f"请为前往 {destination} 旅行的第 {day_num} 天推荐餐饮。\n\n"
             f"**目的地：** {destination}\n"
-            f"**预算水平：** {budget_level}\n"
+            f"**预算水平：** {budget_level}（{budget_info['description']}）\n"
+            f"**餐饮人均价格范围：** {budget_info['dining_per_meal']}\n"
+            f"**单餐人均上限：** {budget_info['dining_meal_max']}元/人\n"
             f"**当天景点位置参考：** {day_attractions_summary}\n"
             f"**已在其他天推荐过的餐厅（不要重复）：** {assigned_str}\n\n"
+            f"**重要：每顿餐饮的 estimated_cost 必须在 {budget_info['dining_per_meal']} 范围内。**\n"
             f"请严格按照系统提示中的 JSON 格式输出。"
         )
 
@@ -262,6 +319,7 @@ class PlannerAgent:
             assigned_attraction_names=assigned_attraction_names,
             weather_text=weather_text,
             preferences=request.preferences or [],
+            budget_level=request.budget,
         )
 
         # 先执行景点规划（因为酒店和餐饮依赖景点位置）
@@ -356,6 +414,43 @@ class PlannerAgent:
     # Phase3: 预算计算
     # ============================================================
 
+    def _estimate_transport_cost_by_distance(
+        self,
+        attractions_data: List[Dict],
+        budget_level: str,
+    ) -> float:
+        """
+        基于景点间实际距离估算交通费用。
+        使用 Haversine 公式计算相邻景点间的总距离，乘以每公里费率。
+        如果景点不足 2 个或缺少位置信息，降级为固定值。
+        """
+        valid_locations = []
+        for attraction in attractions_data:
+            location = attraction.get("location", {})
+            if isinstance(location, dict):
+                lat = location.get("latitude")
+                lng = location.get("longitude")
+                if lat is not None and lng is not None:
+                    try:
+                        valid_locations.append((float(lat), float(lng)))
+                    except (ValueError, TypeError):
+                        continue
+
+        if len(valid_locations) < 2:
+            return TRANSPORT_COST_PER_DAY.get(budget_level, 60.0)
+
+        total_distance_km = 0.0
+        for idx in range(len(valid_locations) - 1):
+            lat1, lng1 = valid_locations[idx]
+            lat2, lng2 = valid_locations[idx + 1]
+            total_distance_km += self._calculate_distance(lat1, lng1, lat2, lng2)
+
+        cost_per_km = TRANSPORT_COST_PER_KM.get(budget_level, 3.0)
+        estimated_cost = total_distance_km * cost_per_km
+
+        minimum_cost = TRANSPORT_COST_PER_DAY.get(budget_level, 60.0) * 0.5
+        return max(estimated_cost, minimum_cost)
+
     def _calculate_daily_budget(
         self,
         attractions_data: List[Dict],
@@ -393,9 +488,12 @@ class PlannerAgent:
                     meal_cost = 0
             dining_cost += float(meal_cost)
 
-        transport_cost = TRANSPORT_COST_PER_DAY.get(budget_level, 60.0)
+        transport_cost = self._estimate_transport_cost_by_distance(attractions_data, budget_level)
 
         total = attraction_ticket_cost + hotel_cost + dining_cost + transport_cost
+
+        budget_info = BUDGET_RANGES.get(budget_level, BUDGET_RANGES["中等"])
+        is_over_budget = total > budget_info["daily_total_max"]
 
         return Budget(
             attraction_ticket_cost=attraction_ticket_cost,
@@ -403,7 +501,44 @@ class PlannerAgent:
             dining_cost=dining_cost,
             transport_cost=transport_cost,
             total=total,
+            budget_level=budget_level,
+            is_over_budget=is_over_budget,
         )
+
+    def _check_budget_compliance(self, daily_budget: Budget, budget_level: str, day_num: int) -> None:
+        """
+        检查单日预算是否超标，超标时记录告警日志。
+        超标阈值为对应预算等级每日上限的 1.5 倍。
+        """
+        budget_info = BUDGET_RANGES.get(budget_level, BUDGET_RANGES["中等"])
+        daily_max = budget_info["daily_total_max"]
+        warning_threshold = daily_max * 1.5
+
+        if daily_budget.total > warning_threshold:
+            logger.warning(
+                f"⚠️ 第{day_num}天预算严重超标: 实际 {daily_budget.total:.0f}元, "
+                f"预算等级「{budget_level}」每日上限 {daily_max}元 (告警阈值 {warning_threshold:.0f}元)"
+            )
+        elif daily_budget.total > daily_max:
+            logger.warning(
+                f"⚠️ 第{day_num}天预算超标: 实际 {daily_budget.total:.0f}元, "
+                f"预算等级「{budget_level}」每日上限 {daily_max}元"
+            )
+
+        hotel_max = budget_info["hotel_max"]
+        if daily_budget.hotel_cost > hotel_max:
+            logger.warning(
+                f"⚠️ 第{day_num}天酒店费用超标: 实际 {daily_budget.hotel_cost:.0f}元/晚, "
+                f"预算等级「{budget_level}」酒店上限 {hotel_max}元/晚"
+            )
+
+        dining_meal_max = budget_info["dining_meal_max"]
+        meal_count = len([m for m in ["breakfast", "lunch", "dinner"] if m])
+        if meal_count > 0 and daily_budget.dining_cost > dining_meal_max * 4:
+            logger.warning(
+                f"⚠️ 第{day_num}天餐饮总费用偏高: 实际 {daily_budget.dining_cost:.0f}元, "
+                f"预算等级「{budget_level}」单餐上限 {dining_meal_max}元/人"
+            )
 
     # ============================================================
     # Phase3: 数据转换 - 将 Agent 输出的 dict 转为 Pydantic 模型
@@ -763,6 +898,9 @@ class PlannerAgent:
                     budget_level=request.budget,
                 )
 
+                # 预算超标检测
+                self._check_budget_compliance(daily_budget, request.budget, day_num)
+
                 # 组装 DailyPlan
                 daily_plan = DailyPlan(
                     day=day_num,
@@ -837,12 +975,26 @@ class PlannerAgent:
             total_hotel_cost = sum(day.budget.hotel_cost for day in daily_plans)
             total_dining_cost = sum(day.budget.dining_cost for day in daily_plans)
             total_transport_cost = sum(day.budget.transport_cost for day in daily_plans)
+            total_cost = total_attraction_ticket_cost + total_hotel_cost + total_dining_cost + total_transport_cost
+
+            budget_info = BUDGET_RANGES.get(request.budget, BUDGET_RANGES["中等"])
+            total_daily_max = budget_info["daily_total_max"] * duration
+            is_total_over_budget = total_cost > total_daily_max
+
+            if is_total_over_budget:
+                logger.warning(
+                    f"⚠️ 总预算超标: 实际 {total_cost:.0f}元, "
+                    f"预算等级「{request.budget}」{duration}天上限 {total_daily_max}元"
+                )
+
             total_budget = Budget(
                 attraction_ticket_cost=total_attraction_ticket_cost,
                 hotel_cost=total_hotel_cost,
                 dining_cost=total_dining_cost,
                 transport_cost=total_transport_cost,
-                total=total_attraction_ticket_cost + total_hotel_cost + total_dining_cost + total_transport_cost,
+                total=total_cost,
+                budget_level=request.budget,
+                is_over_budget=is_total_over_budget,
             )
 
             # 拼装最终响应
