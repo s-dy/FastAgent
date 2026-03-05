@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Optional, Any
 import requests
 import logging
@@ -23,7 +24,8 @@ class Crawler:
             'OptanonConsent': 'implicitConsentCountry=GDPR&implicitConsentDate=1772435461329&isGpcEnabled=0&datestamp=Mon+Mar+02+2026+16%3A12%3A29+GMT%2B0800+(%E4%B8%AD%E5%9B%BD%E6%A0%87%E5%87%86%E6%97%B6%E9%97%B4)&version=202501.2.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=60811722-b388-4a30-a163-b478eac7041d&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&groups=C0001%3A1%2CC0002%3A0%2CC0004%3A0&AwaitingReconsent=false&backfilled_at=1772435535886&backfilled_seed=1&geolocation=CN%3BBJ',
             'bkng_sso_auth': 'CAIQi4nT0gIaeJ4Gl7EBF5uKzNEn0jLnph2AsfP9Z59pr1TflijYPiWq+mxaCK61ByT1pSRFlXO7NIOMJURTvEPd8gx3w9k1lhKb2i05zqIorlUfpduUiUWsY96cWntuDBdFzIpvX72T8KkEIhTYAf3BXjW8xXCaWcjwtsbIcOOvMQ==',
             'bkng': '11UmFuZG9tSVYkc2RlIyh9Yaa29%2F3xUOLbiKbS0JOgDBLgl3HZScbDuU%2Fiw45CHTRgdFfLNHYO7GMnhYw51%2BdYPNZAaqee5%2BqwMpH6u7Ty0dma8fVNppeVIGf3ag8t22t9tWrY7HQflnVsOWmXTmHnpWm8VuEziEsPqX%2FhQ30ZJMXQ0kUAuE9NNnnqXrkwp%2B3y8JVYFaUUN0k%3D',
-            'aws-waf-token': 'd16f5cc2-3f98-436e-ad5e-bb516dab27bd:AgoAiKU4339RAAAA:I3sN9wMgB6yKYmYwa+ggRBKE1IH2f51fs3OFQYB7gQ7wvM1WlohRDAl+YcFVtJF9d7qVdsJ4Es2NnxTpcs5ryUyKYnzC9LSCM7WiCoU5x64ZLyonPvdLJ+vYY/W2dnDtOgVId19yYcFRLFe4tslgi9D0MZ7AkQshqW/P4+P6qbTWAcH0xs+wyJ2u9f82jpbMd2aI76qpniAMbW8D/yFaOIULfFx8Otm+xOy+eS55iYZ84qPqyjUt32Xh7qkpgqv9gAA=',
+            #####################################################################
+            'aws-waf-token': '7ae53fde-16d3-4cdc-b18c-022b08a6e5c6:AgoAndQpIA8mAAAA:Guxm4XwEgR02/EhWywFQKAyEALinINgS+J4/rVKZQZIHu0wd+JhT8JZaVlHeEQxgbRZuqUHdezSLR4zY9H8mMwhDyvVKvTT49TFqdc5IQSYP6bAmFIE3G+y2vqdJYEazyvPgW4Vo9xJAHkjQOZVvZpW13v3J0HobErk2tyHgkKtdxk2CXJawZs5U4WvXpM8Ou3mJTPyUmRwWWDMF0rfqo+jCE00Z80HLrMhp13L5mUZJqnohan+y3RC1tSup5beA/gE=',
         }
 
         self.headers = {
@@ -106,8 +108,6 @@ class Crawler:
                         continue
                     if dest_type not in ['CITY', 'DISTRICT', 'LANDMARK']:
                         continue
-                    if dest_type == "LANDMARK":
-                        dest_type = "DISTRICT"
                     dest_id = destination['destId']
                     break
             return dest_id, dest_type
@@ -128,6 +128,9 @@ class Crawler:
         :return:
         """
         try:
+            logger.info(f"prefix_query => {prefix_query}，checkin => {checkin}，checkout => {checkout}，nb_adults => {nb_adults}，nb_children => {nb_children}，nb_rooms => {nb_rooms}，offset => {offset}")
+            if checkin == checkout:
+                checkout = (datetime.strptime(checkin, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             dest_id, dest_type = self._get_dest_id(prefix_query)
             logger.info(f"dest_id => {dest_id}")
             if not dest_id:
@@ -293,4 +296,4 @@ class Crawler:
 
 
 if __name__ == '__main__':
-    print(Crawler().search_hotels("天安门广场附近", '2026-03-04', '2026-03-05'))
+    print(Crawler().search_hotels("泉城广场", '2026-03-06', '2026-03-06'))
