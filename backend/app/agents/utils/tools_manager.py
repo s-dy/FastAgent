@@ -5,6 +5,7 @@ from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from app.observability.logger import default_logger as logger
+from app.services.mcp_cache_service import mcp_cache_service
 from app.utils import _run_async
 
 class ToolsManager:
@@ -59,8 +60,25 @@ class ToolsManager:
                 content=error_message,
                 tool_call_id=tool_call_id,
             )
+
+        # 检查 Redis 缓存：用原始参数作为缓存 Key
+        cached_result = mcp_cache_service.get_cached_result(tool_name, tool_args)
+        if cached_result is not None:
+            # 缓存命中：如果调用方提供了 parser，对缓存的原始数据重新执行 parser
+            if parser:
+                cached_result = parser(cached_result)
+            return ToolMessage(
+                content=cached_result,
+                tool_call_id=tool_call_id,
+            )
+
+        # 缓存未命中：实际调用 MCP 工具
         try:
             tool_result = _run_async(tool.ainvoke(tool_args))
+
+            # 先将原始结果写入缓存（parser 之前），保证缓存的是通用数据
+            mcp_cache_service.set_cached_result(tool_name, tool_args, tool_result)
+
             if parser:
                 tool_result = parser(tool_result)
             logger.info(f"  ✅ 工具 '{tool_name}' 执行成功")

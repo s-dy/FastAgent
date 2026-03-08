@@ -7,21 +7,22 @@ from typing import List
 import uuid
 
 from app.config import settings
-from app.agents.planner import PlannerAgent, CITY_BOUNDS
+from app.agents.agents import TripPlannerGraph
+from app.agents.utils.geo import CITY_BOUNDS
 from app.models import TripPlanRequest, TripPlanResponse
 from app.observability.logger import default_logger as logger
 from app.exceptions.custom_exceptions import BusinessException
 from app.exceptions.error_codes import ErrorCode
 from app.middleware.auth import get_user_id
 
-from fastagent.core import LLMClient
-from fastagent.memory import MemoryConfig, MemoryManager
+# from fastagent.core import LLMClient
+# from fastagent.memory import MemoryConfig, MemoryManager
 from app.services.redis_service import redis_service
 
 router = APIRouter()
 
 # 初始化所有Agent
-llm_client = LLMClient(model=os.getenv("DASHSCOPE_MODEL_NAME"), api_key=os.getenv("DASHSCOPE_API_KEY"), base_url=os.getenv("DASHSCOPE_BASE_URL"))
+# llm_client = LLMClient(model=os.getenv("DASHSCOPE_MODEL_NAME"), api_key=os.getenv("DASHSCOPE_API_KEY"), base_url=os.getenv("DASHSCOPE_BASE_URL"))
 
 
 @router.post("/plan", response_model=TripPlanResponse)
@@ -78,22 +79,22 @@ def plan_trip(request: TripPlanRequest, http_request: Request):
                 extra={"is_supported_city": True}
             )
 
-        # 调用PlannerAgent进行规划
-        memory_manager = MemoryManager(
-            user_id=user_id,
-            config=MemoryConfig(
-                enable_working=True,
-                enable_episodic=True,
-                enable_semantic=False,
-                enable_perceptual=False,
-                milvus_host=settings.MILVUS_HOST,
-                milvus_port=settings.MILVUS_PORT,
-                milvus_collection_name=settings.MILVUS_COLLECTION_NAME,
-            )
-        )
-        planner_agent = PlannerAgent(llm_service=llm_client, memory_manager=memory_manager)
+        # # 调用PlannerAgent进行规划
+        # memory_manager = MemoryManager(
+        #     user_id=user_id,
+        #     config=MemoryConfig(
+        #         enable_working=True,
+        #         enable_episodic=True,
+        #         enable_semantic=False,
+        #         enable_perceptual=False,
+        #         milvus_host=settings.MILVUS_HOST,
+        #         milvus_port=settings.MILVUS_PORT,
+        #         milvus_collection_name=settings.MILVUS_COLLECTION_NAME,
+        #     )
+        # )
+        # planner_agent = PlannerAgent(llm_service=llm_client, memory_manager=memory_manager)
 
-        final_plan = planner_agent.plan_trip(request=request, user_id=user_id)
+        final_plan = TripPlannerGraph().plan_trip(request=request, user_id=user_id)
         
         # 保存向量记忆和完整行程
         if final_plan:
@@ -108,10 +109,10 @@ def plan_trip(request: TripPlanRequest, http_request: Request):
                 "trip_title": final_plan.trip_title,
                 "days": [day.model_dump() for day in final_plan.days]
             }
-            memory_manager.add_memory(
-                memory_type="working",
-                content=json.dumps(trip_data),
-            )
+            # memory_manager.add_memory(
+            #     memory_type="working",
+            #     content=json.dumps(trip_data),
+            # )
             
             # 保存完整行程到Redis
             trip_id = str(uuid.uuid4())

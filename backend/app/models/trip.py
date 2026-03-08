@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from app.models.common import Hotel, Attraction, Meal, WeatherInfo, Budget
 
+# 允许的最大预订天数（未来 N 天）
+MAX_FUTURE_DAYS = 4
 
 
 class TripPlanRequest(BaseModel):
@@ -12,6 +15,58 @@ class TripPlanRequest(BaseModel):
     preferences: List[str] = Field(default_factory=list, description="旅行偏好", examples=["历史", "美食"])
     hotel_preferences: List[str] = Field(default_factory=list, description="酒店偏好", examples=["经济型"])
     budget: str = Field(default="中等", description="预算水平（如：经济、适中、豪华）", examples=["中等"])
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "TripPlanRequest":
+        """
+        日期验证规则：
+        1. start_date 和 end_date 必须是合法的 YYYY-MM-DD 格式
+        2. start_date 必须严格大于今天（最早为明天）
+        3. end_date 必须 >= start_date
+        4. start_date 和 end_date 都必须在未来 MAX_FUTURE_DAYS 天以内
+        """
+        today = datetime.now().date()
+        earliest_allowed = today + timedelta(days=1)
+        latest_allowed = today + timedelta(days=MAX_FUTURE_DAYS)
+
+        try:
+            start = datetime.strptime(self.start_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError(
+                f"start_date 格式无效，请使用 YYYY-MM-DD 格式，收到: '{self.start_date}'"
+            )
+
+        try:
+            end = datetime.strptime(self.end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise ValueError(
+                f"end_date 格式无效，请使用 YYYY-MM-DD 格式，收到: '{self.end_date}'"
+            )
+
+        if start < earliest_allowed:
+            raise ValueError(
+                f"start_date 必须大于今天({today})，"
+                f"允许的最早日期为 {earliest_allowed}，收到: {self.start_date}"
+            )
+
+        if end < start:
+            raise ValueError(
+                f"end_date({self.end_date}) 不能早于 start_date({self.start_date})"
+            )
+
+        if start > latest_allowed:
+            raise ValueError(
+                f"start_date 超出允许范围，最晚为 {latest_allowed}（未来{MAX_FUTURE_DAYS}天），"
+                f"收到: {self.start_date}"
+            )
+
+        if end > latest_allowed:
+            raise ValueError(
+                f"end_date 超出允许范围，最晚为 {latest_allowed}（未来{MAX_FUTURE_DAYS}天），"
+                f"收到: {self.end_date}"
+            )
+
+        return self
 
 
 class DailyPlan(BaseModel):

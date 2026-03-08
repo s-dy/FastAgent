@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     VECTOR_DIM: int = 384
 
+    # MCP 缓存配置
+    MCP_CACHE_ENABLED: bool = True
+
     # HuggingFace 配置
     HF_ENDPOINT: str = "https://hf-mirror.com"
     HF_HUB_OFFLINE: bool = False
