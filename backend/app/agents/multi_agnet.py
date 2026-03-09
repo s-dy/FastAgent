@@ -79,10 +79,6 @@ class TripSection(BaseModel):
     task_input: Dict[str, Any]  # 任务输入参数
     day_num: Optional[int] = None  # 如果是每日规划，记录天数
 
-class TripSections(BaseModel):
-    """所有行程部分"""
-    sections: List[TripSection] = Field(description="行程的各个部分")
-
 class CoordinatorState(TypedDict):
     """协调器主状态"""
     request_id: str
@@ -301,20 +297,20 @@ async def attraction_search_worker(state: AttractionSearchWorkerState) -> Dict[s
     # 构建搜索关键词
     keywords = preferences[1] if len(preferences) > 1 else "热门景点"
 
-    # 调用 LLM 搜索景点
-    attraction_prompt = f"请搜索 {destination} 的{keywords}"
-    attraction_raw = await invoke_llm_with_system(
-        ATTRACTION_SEARCH_PROMPT,
-        attraction_prompt,
-        use_tool=True,
-        max_tool_iterations=2
-    )
+    # # 调用 LLM 搜索景点
+    # attraction_prompt = f"请搜索 {destination} 的{keywords}"
+    # attraction_raw = await invoke_llm_with_system(
+    #     ATTRACTION_SEARCH_PROMPT,
+    #     attraction_prompt,
+    #     use_tool=True,
+    #     max_tool_iterations=2
+    # )
 
     # 解析景点数据
     raw_attractions = []
     try:
-        if isinstance(attraction_raw, str):
-            if "maps_text_search" in attraction_raw:
+        # if isinstance(attraction_raw, str):
+        #     if "maps_text_search" in attraction_raw:
                 result = ToolsManager().call_tool(
                     "maps_text_search",
                     {"keywords": keywords, "city": destination}
@@ -323,7 +319,10 @@ async def attraction_search_worker(state: AttractionSearchWorkerState) -> Dict[s
     except Exception as e:
         logger.error(f"❌ [Attraction Worker] 景点搜索失败: {e}")
 
-    logger.info(f"✅ [Attraction Worker] 景点搜索完成，数量: {len(raw_attractions)}")
+    if not raw_attractions:
+        logger.warning(f"❌ [Attraction Worker] 景点数据为空")
+    logger.info(f"✅ [Attraction Worker] 景点搜索完成")
+
 
     # 返回单个结果，reducer 会自动合并
     return {
@@ -348,19 +347,19 @@ async def weather_search_worker(state: WeatherSearchWorkerState) -> Dict[str, An
     logger.info(f"🔧 [Weather Worker] 开始查询 {destination} 的天气...")
 
     # 调用 LLM 查询天气
-    weather_prompt = f"请查询 {destination} 的天气"
-    weather_raw = await invoke_llm_with_system(
-        WEATHER_SEARCH_PROMPT,
-        weather_prompt,
-        use_tool=True,
-        max_tool_iterations=2
-    )
+    # weather_prompt = f"请查询 {destination} 的天气"
+    # weather_raw = await invoke_llm_with_system(
+    #     WEATHER_SEARCH_PROMPT,
+    #     weather_prompt,
+    #     use_tool=True,
+    #     max_tool_iterations=2
+    # )
 
     # 解析天气数据
     raw_weather = []
     try:
-        if isinstance(weather_raw, str):
-            if "maps_weather" in weather_raw:
+        # if isinstance(weather_raw, str):
+        #     if "maps_weather" in weather_raw:
                 result = ToolsManager().call_tool(
                     "maps_weather",
                     {"city": destination}
