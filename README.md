@@ -36,19 +36,34 @@
 │  中间件链: RequestID → Auth → RateLimit → CORS           │
 │                                                          │
 │  ┌─────────────────────────────────────────────────┐     │
-│  │            PlannerAgent (三阶段流水线)             │     │
+│  │     OrchestratorWorkerPlanner (协调器-工作器)      │     │
 │  │                                                   │     │
-│  │  Phase1: 并行搜索                                  │     │
-│  │    ├─ AttractionSearchAgent (景点搜索·工具调用)     │     │
-│  │    └─ WeatherQueryAgent (天气查询·工具调用)         │     │
+│  │  基于 LangGraph 的 Send API 实现动态任务调度        │     │
 │  │                                                   │     │
-│  │  Phase2: 按天循环规划 (每天并行)                    │     │
-│  │    ├─ DailyAttractionPlanAgent (单日景点规划)       │     │
-│  │    ├─ DailyHotelPlanAgent (单日酒店推荐·工具调用)   │     │
-│  │    └─ DailyDiningPlanAgent (单日餐饮推荐)           │     │
-│  │                                                   │     │
-│  │  Phase3: 验证 + 主题生成 + 预算计算 + 存储          │     │
-│  │    └─ TripThemeAgent (标题和主题生成)               │     │
+│  │  ┌─────────────────────────────────────────┐     │     │
+│  │  │  Orchestrator (协调器)                  │     │     │
+│  │  │  - 任务分解与委派                        │     │     │
+│  │  │  - 动态生成 TripSection                 │     │     │
+│  │  │  - 管理任务依赖关系                      │     │     │
+│  │  └──────────────┬──────────────────────────┘     │     │
+│  │                 │ Send API (动态节点创建)          │     │
+│  │                 ▼                                 │     │
+│  │  ┌─────────────────────────────────────────┐     │     │
+│  │  │  Workers (工作节点，并行执行)            │     │     │
+│  │  │                                         │     │     │
+│  │  │  景点搜索 Worker                        │     │     │
+│  │  │  天气查询 Worker                        │     │     │
+│  │  │  每日规划 Worker (多个实例，每天一个)    │     │     │
+│  │  └──────────────┬──────────────────────────┘     │     │
+│  │                 │                                 │     │
+│  │                 ▼                                 │     │
+│  │  ┌─────────────────────────────────────────┐     │     │
+│  │  │  Synthesizer (合成器)                   │     │     │
+│  │  │  - 汇总所有工作节点结果                  │     │     │
+│  │  │  - 生成标题和主题                        │     │     │
+│  │  │  - 计算总预算                           │     │     │
+│  │  │  - 验证相邻天行程                        │     │     │
+│  │  └─────────────────────────────────────────┘     │     │
 │  └─────────────────────────────────────────────────┘     │
 │                                                          │
 │  外部服务:                                                │
@@ -96,9 +111,10 @@ TravelAgent/
 │   │   ├── main.py                   # FastAPI 应用 + 中间件注册
 │   │   ├── config.py                 # 配置管理 (环境变量)
 │   │   ├── agents/                   # 智能体
-│   │   │   ├── agents.py             # 6 个 Agent 定义
-│   │   │   ├── enhanced_agent.py     # Agent 基类 (工具调用/JSON解析)
-│   │   │   └── planner.py            # 三阶段规划流水线
+│   │   │   ├── multi_agnet.py          # 协调器-工作器架构（Orchestrator-Worker）
+│   │   │   ├── agents.py               # Agent 定义和工具
+│   │   │   ├── enhanced_agent.py       # Agent 基类（工具调用/JSON解析）
+│   │   │   └── planner.py              # 旧版规划器（已废弃）
 │   │   ├── api/v1/                   # REST API
 │   │   │   ├── trip.py               # 行程规划接口
 │   │   │   └── auth.py               # 用户认证接口
@@ -153,36 +169,43 @@ TravelAgent/
 
 ## 🤖 智能体设计
 
-系统包含 6 个专业化智能体，通过三阶段流水线协作完成行程规划：
+系统采用**协调器-工作器（Orchestrator-Worker）架构**，基于 LangGraph 的 Send API 实现多智能体协作：
 
-| Agent | 角色 | 工具调用 | 说明 |
+| 组件 | 角色 | 工具调用 | 说明 |
 |-------|------|:--------:|------|
-| **AttractionSearchAgent** | 景点搜索专家 | ✅ | 通过高德 MCP 搜索目的地景点，返回原始数据 |
-| **WeatherQueryAgent** | 天气查询专家 | ✅ | 查询行程期间每日天气预报 |
-| **DailyAttractionPlanAgent** | 单日景点规划 | ❌ | 从候选景点中为每天挑选 2-4 个，考虑距离和天气 |
-| **DailyHotelPlanAgent** | 单日酒店推荐 | ✅ | 根据当天景点位置动态搜索附近酒店 |
-| **DailyDiningPlanAgent** | 单日餐饮推荐 | ❌ | 为每天推荐早餐、午餐、晚餐和小吃 |
-| **TripThemeAgent** | 行程主题专家 | ❌ | 生成行程标题和每日主题 |
+| **Orchestrator** | 任务协调器 | ❌ | 分解任务、生成 TripSection、动态分配工作节点 |
+| **AttractionSearchWorker** | 景点搜索工作节点 | ✅ | 通过高德 MCP 搜索目的地景点 |
+| **WeatherSearchWorker** | 天气查询工作节点 | ✅ | 查询行程期间每日天气预报 |
+| **DailyPlanningWorker** | 每日规划工作节点 | ✅ | 规划单日行程（景点、酒店、餐饮） |
+| **Synthesizer** | 结果合成器 | ❌ | 汇总结果、生成标题主题、计算预算 |
 
-### 三阶段规划流程
+### 协调器-工作器执行流程
 
 ```
-Phase 1: 并行搜索 ──────────────────────────────────────────
-  ├─ AttractionSearchAgent ──→ 原始景点数据
-  └─ WeatherQueryAgent     ──→ 天气预报数据
-                                    │
-Phase 2: 按天循环规划 (每天内部并行) ──────────────────────────
-  Day N:
-    ├─ DailyAttractionPlanAgent ──→ 当日景点 (2-4个)
-    ├─ DailyHotelPlanAgent      ──→ 当日推荐酒店
-    └─ DailyDiningPlanAgent     ──→ 当日餐饮推荐
-                                    │
-Phase 3: 验证与拼装 ─────────────────────────────────────────
-  ├─ 地理位置验证 (城市边界 + 景点间距)
-  ├─ TripThemeAgent ──→ 标题和每日主题
-  ├─ 预算计算 (门票 + 酒店 + 餐饮 + 交通)
-  └─ 存储 (Redis 行程 + Milvus 向量记忆)
+阶段 1: 数据收集（并行）
+  ├─ Orchestrator 生成景点搜索和天气查询任务
+  ├─ Send API 创建 AttractionSearchWorker 和 WeatherSearchWorker
+  └─ Workers 并行执行，结果写入共享状态
+
+阶段 2: 每日规划（并行）
+  ├─ Orchestrator 检测到阶段1完成
+  ├─ 将景点均匀分配到每一天
+  ├─ Send API 创建 N 个 DailyPlanningWorker（N = 行程天数）
+  └─ Workers 并行执行每日规划，结果写入共享状态
+
+阶段 3: 结果合成
+  ├─ Synthesizer 汇总所有工作节点结果
+  ├─ 生成行程标题和每日主题
+  ├─ 计算总预算并验证相邻天行程
+  └─ 返回最终行程计划
 ```
+
+### 核心特性
+
+- **动态任务调度**：Orchestrator 根据执行进度动态生成任务
+- **并行执行**：所有工作节点并行运行，大幅提升效率
+- **状态共享**：通过 `operator.add` reducer 实现安全的状态聚合
+- **任务依赖管理**：通过条件边自动管理任务间的依赖关系
 
 ## 🔌 API 接口
 
@@ -305,4 +328,3 @@ LOG_LEVEL=INFO
 - [ ] 移动端：小程序或 APP
 - [ ] 实时协作：多人共同编辑行程
 - [ ] 预算预测：基于历史数据预测实际花费
-

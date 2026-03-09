@@ -7,7 +7,7 @@ from typing import List
 import uuid
 
 from app.config import settings
-from app.agents.agents import TripPlannerGraph
+from app.agents.multi_agnet import TripPlannerGraph
 from app.agents.utils.geo import CITY_BOUNDS
 from app.models import TripPlanRequest, TripPlanResponse
 from app.observability.logger import default_logger as logger
@@ -26,7 +26,7 @@ router = APIRouter()
 
 
 @router.post("/plan", response_model=TripPlanResponse)
-def plan_trip(request: TripPlanRequest, http_request: Request):
+async def plan_trip(request: TripPlanRequest, http_request: Request):
     """
     接收行程规划请求，通过多智能体协作完成规划。（增强版 - 支持记忆和上下文）
     """
@@ -94,7 +94,7 @@ def plan_trip(request: TripPlanRequest, http_request: Request):
         # )
         # planner_agent = PlannerAgent(llm_service=llm_client, memory_manager=memory_manager)
 
-        final_plan = TripPlannerGraph().plan_trip(request=request, user_id=user_id)
+        final_plan = await TripPlannerGraph().plan_trip(request=request, user_id=user_id)
         
         # 保存向量记忆和完整行程
         if final_plan:
@@ -167,7 +167,7 @@ def plan_trip(request: TripPlanRequest, http_request: Request):
 
 
 @router.get("/list", response_model=List[TripPlanResponse])
-def get_trip_list(http_request: Request):
+async def get_trip_list(http_request: Request):
     """
     获取用户的所有行程列表
     """
@@ -185,7 +185,7 @@ def get_trip_list(http_request: Request):
 
 
 @router.get("/{trip_id}", response_model=TripPlanResponse)
-def get_trip(trip_id: str, http_request: Request):
+async def get_trip(trip_id: str, http_request: Request):
     """
     获取指定行程的完整数据
     """
@@ -210,7 +210,7 @@ def get_trip(trip_id: str, http_request: Request):
 
 
 @router.delete("/{trip_id}")
-def delete_trip(trip_id: str, http_request: Request):
+async def delete_trip(trip_id: str, http_request: Request):
     """
     删除指定行程
     """

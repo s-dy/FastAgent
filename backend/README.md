@@ -17,43 +17,39 @@
 
 ## 🏗️ 系统架构
 
-### 三阶段规划流水线
+### 三阶段规划流水线 → 协调器-工作器架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    PlannerAgent (协调器)                      │
+│                  OrchestratorWorkerPlanner                   │
+│                  (协调器-工作器架构)                           │
 │                                                             │
-│  Phase1: 并行信息收集                                         │
-│  ┌─────────────────────┐  ┌─────────────────────┐          │
-│  │ AttractionSearchAgent│  │  WeatherQueryAgent  │          │
-│  │   (景点搜索专家)      │  │   (天气查询专家)     │          │
-│  │   🔧 高德地图 MCP     │  │   🔧 高德地图 MCP    │          │
-│  └─────────┬───────────┘  └──────────┬──────────┘          │
-│            │                         │                      │
-│            ▼                         ▼                      │
-│  Phase2: 按天循环规划（每天内部并行）                           │
+│  基于 LangGraph 的 Send API 实现动态任务调度                  │
+│                                                             │
 │  ┌──────────────────────────────────────────────┐          │
-│  │  for each day:                                │          │
-│  │  ┌──────────────┐ ┌──────────────┐           │          │
-│  │  │ DailyAttraction│ │ DailyDining  │           │          │
-│  │  │  PlanAgent    │ │  PlanAgent   │           │          │
-│  │  │ (景点分配)     │ │ (餐饮推荐)    │           │          │
-│  │  └──────┬───────┘ └──────┬───────┘           │          │
-│  │         │                │                    │          │
-│  │         ▼                │                    │          │
-│  │  ┌──────────────┐       │                    │          │
-│  │  │ DailyHotel   │       │                    │          │
-│  │  │  PlanAgent   │       │                    │          │
-│  │  │ 🔧 动态搜索   │       │                    │          │
-│  │  └──────┬───────┘       │                    │          │
-│  │         └───────┬───────┘                    │          │
-│  └─────────────────┼────────────────────────────┘          │
-│                    ▼                                        │
-│  Phase3: 拼装验证                                            │
-│  ┌──────────────┐  ┌──────────────────────────┐            │
-│  │ TripThemeAgent│  │ 程序化预算计算 + 地理验证   │            │
-│  │ (标题/主题)    │  │ + 拼装 TripPlanResponse   │            │
-│  └──────────────┘  └──────────────────────────┘            │
+│  │  Orchestrator (协调器)                       │          │
+│  │  - 任务分解与委派                             │          │
+│  │  - 动态生成 TripSection                      │          │
+│  │  - 管理任务依赖关系                           │          │
+│  └──────────────┬───────────────────────────────┘          │
+│                 │ Send API (动态节点创建)                    │
+│                 ▼                                           │
+│  ┌──────────────────────────────────────────────┐          │
+│  │  Workers (工作节点，并行执行)                 │          │
+│  │                                              │          │
+│  │  景点搜索 Worker (高德 MCP)                   │          │
+│  │  天气查询 Worker (高德 MCP)                   │          │
+│  │  每日规划 Worker (多个实例，每天一个)          │          │
+│  └──────────────┬───────────────────────────────┘          │
+│                 │                                           │
+│                 ▼                                           │
+│  ┌──────────────────────────────────────────────┐          │
+│  │  Synthesizer (合成器)                        │          │
+│  │  - 汇总所有工作节点结果                       │          │
+│  │  - 生成标题和主题                             │          │
+│  │  - 计算总预算                                │          │
+│  │  - 验证相邻天行程                             │          │
+│  └──────────────────────────────────────────────┘          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,36 +57,45 @@
 
 | 阶段 | 说明 | 执行方式 |
 |------|------|---------|
-| **Phase1** | 并行搜索景点和天气原始数据 | `ThreadPoolExecutor` 并行 |
-| **Phase2** | 按天循环，每天并行调用景点/酒店/餐饮 Agent | 逐天串行，天内并行 |
-| **Phase3** | 生成标题主题 → 程序化计算预算 → 地理验证 → 拼装响应 | 顺序执行 |
+| **阶段1** | 并行搜索景点和天气原始数据 | Send API 创建 2 个 Worker 并行执行 |
+| **阶段2** | 每日规划（景点、酒店、餐饮） | Send API 创建 N 个 Worker 并行执行（N=天数） |
+| **阶段3** | 拼装验证 | Synthesizer 顺序执行 |
 
 ---
 
 ## 🤖 Agent 角色设计
 
-系统共包含 **6 个专业 Agent**，分为两类：
+系统采用**协调器-工作器架构**，包含以下核心组件：
 
-### 搜索类 Agent（Phase1，带工具调用）
+### 协调器（Orchestrator）
 
-| Agent | 职责 | 工具 |
-|-------|------|------|
-| **AttractionSearchAgent** | 根据城市和用户偏好搜索景点 POI | 高德地图 MCP |
-| **WeatherQueryAgent** | 查询行程期间的天气预报 | 高德地图 MCP |
+- **职责**：任务分解、动态生成 TripSection、管理任务依赖关系
+- **输入**：CoordinatorState（包含请求信息、已完成任务等）
+- **输出**：TripSection 列表（待执行的任务）
+- **特点**：根据执行进度动态调整任务分配策略
 
-### 规划类 Agent（Phase2/3，结构化输出）
+### 工作节点（Workers）
 
-| Agent | 职责 | 工具调用 | 单次输出 |
-|-------|------|---------|---------|
-| **DailyAttractionPlanAgent** | 从候选景点中为单天挑选 2~4 个景点 | 否 | ~500-800 token |
-| **DailyHotelPlanAgent** | 根据当天景点位置**动态搜索**附近酒店 | **是**（高德 MCP） | ~200-300 token |
-| **DailyDiningPlanAgent** | 为单天推荐早/午/晚餐及特色小吃 | 否 | ~300-500 token |
-| **TripThemeAgent** | 为整个行程生成标题和每天主题 | 否 | ~200 token |
+| 组件 | 职责 | 工具调用 | 说明 |
+|-------|------|---------|------|
+| **AttractionSearchWorker** | 搜索景点 POI | 是（高德 MCP） | 返回原始景点数据 |
+| **WeatherSearchWorker** | 查询天气预报 | 是（高德 MCP） | 返回行程期间天气数据 |
+| **DailyPlanningWorker** | 规划单日行程 | 是（高德 MCP） | 包含景点、酒店、餐饮规划 |
 
-所有 Agent 继承自 `EnhancedAgent`，具备：
-- **记忆能力**：通过 `MemoryManager` 检索和存储用户历史偏好
-- **上下文感知**：通过 `ContextManager` 在 Agent 间共享数据
-- **防无限循环**：工具调用次数达阈值后引导总结，最后一次迭代强制 `tool_choice="none"`
+### 合成器（Synthesizer）
+
+- **职责**：汇总结果、生成标题主题、计算总预算、验证相邻天行程
+- **输入**：所有工作节点的 completed_tasks
+- **输出**：TripPlanResponse（最终行程计划）
+
+### 核心特性
+
+- **Send API 动态节点创建**：运行时动态创建工作节点实例
+- **状态共享与聚合**：通过 `operator.add` reducer 自动合并工作节点结果
+- **并行执行**：所有工作节点并行运行，大幅提升效率
+- **任务依赖管理**：通过条件边自动管理任务间的依赖关系
+
+详细设计文档见：[`docs/多智能体设计.md`](../docs/多智能体设计.md)
 
 ---
 
@@ -221,49 +226,31 @@ python tests/test_planer.py
 ### 使用示例
 
 ```python
-import os
-from dotenv import load_dotenv
-from fastagent.core import LLMClient
-from fastagent.memory import MemoryConfig, MemoryManager
-from backend.app import PlannerAgent
-from backend.app import TripPlanRequest
+import asyncio
+from backend.app.agents.multi_agnet import OrchestratorWorkerPlanner
+from backend.app.models.trip import TripPlanRequest
 
-load_dotenv()
+async def plan_trip_example():
+    # 创建规划器
+    planner = OrchestratorWorkerPlanner()
 
-# 初始化 LLM 客户端
-llm_client = LLMClient(
-    model=os.getenv("DASHSCOPE_MODEL_NAME"),
-    api_key=os.getenv("DASHSCOPE_API_KEY"),
-    base_url=os.getenv("DASHSCOPE_BASE_URL"),
-)
+    # 构建请求
+    request = TripPlanRequest(
+        destination="北京",
+        start_date="2024-10-01",
+        end_date="2024-10-03",
+        preferences=["历史", "美食"],
+        hotel_preferences=["经济型"],
+        budget="中等",
+    )
 
-# 初始化记忆管理器
-memory_manager = MemoryManager(
-    user_id="user_001",
-    config=MemoryConfig(
-        enable_working=True,
-        enable_episodic=True,
-        enable_semantic=False,
-        enable_perceptual=False,
-    ),
-)
+    # 执行规划
+    response = await planner.plan_trip(request, user_id="user_001")
+    print(response.model_dump_json(indent=2))
 
-# 创建规划器
-planner = PlannerAgent(llm_service=llm_client, memory_manager=memory_manager)
-
-# 构建请求
-request = TripPlanRequest(
-    destination="北京",
-    start_date="2024-10-01",
-    end_date="2024-10-03",
-    preferences=["历史", "美食"],
-    hotel_preferences=["经济型"],
-    budget="中等",
-)
-
-# 执行规划
-response = planner.plan_trip(request, user_id="user_001")
-print(response.model_dump_json(indent=2))
+# 运行示例
+if __name__ == "__main__":
+    asyncio.run(plan_trip_example())
 ```
 
 ---
@@ -333,4 +320,3 @@ print(response.model_dump_json(indent=2))
 ## 📄 License
 
 本项目仅供学习和研究使用。
-

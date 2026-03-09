@@ -79,7 +79,7 @@ def _load_tools() -> List[BaseTool]:
                 "transport": "http",
             },
             "hotel": {
-                "url": "http://127.0.0.1:8000/mcp",
+                "url": "http://127.0.0.1:8989/mcp",
                 "transport": "http",
             },
         })
