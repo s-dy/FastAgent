@@ -31,7 +31,6 @@ from .utils.prompts import (
 from .utils.llm import invoke_llm_with_system
 from .utils.validators import validate_and_filter_daily_plan, validate_adjacent_days
 from app.services.user_profile_service import user_profile_service
-from app.services.trip_memory_service import trip_memory_service, TripMemoryService
 from app.utils import _run_async
 
 
@@ -97,33 +96,18 @@ def node_load_memory(state: TripPlanState) -> dict:
     记忆加载节点：在规划开始前一次性加载长期记忆。
 
     1. 从 Redis 读取用户偏好画像
-    2. 从 Milvus 检索相关情景记忆（最多 3 条）
-    3. 合并为 memory_context 文本，写入 State
+    2. 构建偏好画像的文本上下文，写入 State
     """
     user_id = state["user_id"]
     request = state["request"]
     destination = request["destination"]
-    preferences = request.get("preferences", [])
-
     logger.info(f"🧠 [Memory] 加载用户长期记忆: user_id={user_id}, dest={destination}")
 
     # 1. 加载用户偏好画像
     user_profile = user_profile_service.get_profile(user_id)
 
     # 2. 构建偏好画像的文本上下文
-    profile_context = user_profile_service.build_memory_context(user_id, destination)
-
-    # 3. 检索情景记忆的文本上下文
-    episodic_context = trip_memory_service.build_memory_context(user_id, destination, preferences, limit=3)
-
-    # 4. 合并为完整的 memory_context
-    context_parts = []
-    if profile_context:
-        context_parts.append(profile_context)
-    if episodic_context:
-        context_parts.append(episodic_context)
-
-    memory_context = "\n".join(context_parts)
+    memory_context = user_profile_service.build_memory_context(user_id, destination)
 
     if memory_context:
         logger.info(f"✅ [Memory] 记忆加载完成，memory_context 长度: {len(memory_context)}")
@@ -476,7 +460,6 @@ def node_save_memory(state: TripPlanState) -> dict:
     记忆存储节点：规划完成后持久化长期记忆。
 
     1. 增量更新用户偏好画像到 Redis
-    2. 存储本次行程的自然语言摘要到 Milvus 向量库
     """
     user_id = state["user_id"]
     request = state["request"]
@@ -492,7 +475,6 @@ def node_save_memory(state: TripPlanState) -> dict:
     preferences = request.get("preferences", [])
     budget_level = request.get("budget", "中等")
     hotel_preferences = request.get("hotel_preferences", [])
-    start_date = request.get("start_date", "")
     duration = state["duration"]
 
     # 从 final_response 中提取景点和酒店名称
@@ -511,9 +493,8 @@ def node_save_memory(state: TripPlanState) -> dict:
 
     total_budget_data = final_response.get("total_budget", {})
     actual_total_cost = total_budget_data.get("total", 0.0)
-    is_over_budget = total_budget_data.get("is_over_budget", False)
 
-    # 1. 更新用户偏好画像
+    # 更新用户偏好画像
     try:
         user_profile_service.update_after_trip(
             user_id=user_id,
@@ -527,28 +508,6 @@ def node_save_memory(state: TripPlanState) -> dict:
         )
     except Exception as profile_error:
         logger.error(f"❌ [Memory] 更新用户画像失败: {profile_error}")
-
-    # 2. 存储情景记忆
-    try:
-        memory_text = TripMemoryService.build_trip_summary(
-            destination=destination,
-            start_date=start_date,
-            duration=duration,
-            preferences=preferences,
-            budget_level=budget_level,
-            attraction_names=all_attraction_names,
-            hotel_names=all_hotel_names,
-            total_cost=actual_total_cost,
-            is_over_budget=is_over_budget,
-        )
-        trip_memory_service.save_trip_memory(
-            user_id=user_id,
-            memory_text=memory_text,
-            destination=destination,
-            trip_date=start_date,
-        )
-    except Exception as memory_error:
-        logger.error(f"❌ [Memory] 存储情景记忆失败: {memory_error}")
 
     logger.info("✅ [Memory] 长期记忆存储完成")
     return {}

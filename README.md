@@ -15,7 +15,7 @@
 - **实时天气**：通过高德 MCP 工具查询行程期间天气预报，雨天自动优先室内景点
 - **地理位置验证**：确保景点在目标城市范围内，同一天景点距离控制在 50km 内
 - **用户认证**：JWT 令牌认证 + 访客模式，支持注册登录和行程管理
-- **向量记忆**：Milvus 向量数据库记录用户偏好和历史行程，越用越智能
+- **用户偏好记忆**：Redis 存储用户偏好画像（历史行程、偏好频次、预算习惯），越用越智能
 - **行程编辑**：支持拖拽排序景点、添加/删除景点和餐厅、个人备注
 - **导出功能**：支持导出为 PDF 或图片格式
 - **并行优化**：Phase1 景点和天气并行搜索，Phase2 每天三个 Agent 并行规划
@@ -69,8 +69,7 @@
 │  外部服务:                                                │
 │    ├─ 高德地图 MCP (景点/酒店/天气搜索工具)               │
 │    ├─ 通义千问 LLM (qwen-plus)                           │
-│    ├─ Redis (用户数据 + 行程持久化)                       │
-│    └─ Milvus (向量记忆存储)                               │
+│    └─ Redis (用户数据 + 行程持久化 + 偏好画像)            │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -81,8 +80,7 @@
 |------|------|
 | Web 框架 | FastAPI + Uvicorn |
 | LLM 服务 | 通义千问 (qwen-plus) / OpenAI 兼容接口 |
-| Agent 框架 | HelloAgents |
-| 向量数据库 | Milvus + Sentence-Transformers |
+| Agent 框架 | LangGraph |
 | 数据持久化 | Redis |
 | 地图服务 | 高德地图 API（MCP 协议） |
 | 认证 | JWT (PyJWT) + Bcrypt |
@@ -243,7 +241,6 @@ TravelAgent/
 - **Python** 3.11+
 - **Node.js** 16+
 - **Redis** 6+
-- **Milvus** 2.x（可选，用于向量记忆）
 - **高德地图 API Key**
 - **通义千问 API Key**（或其他 OpenAI 兼容 LLM）
 
@@ -303,9 +300,7 @@ REDIS_PASSWORD=
 JWT_SECRET=your-secret-key-change-in-production
 JWT_EXPIRY_HOURS=24
 
-# Milvus 向量数据库 (可选)
-MILVUS_HOST=localhost
-MILVUS_PORT=19530
+
 
 # 服务配置
 HOST=0.0.0.0
