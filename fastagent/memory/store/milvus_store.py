@@ -66,14 +66,33 @@ class MilvusVectorStore:
             monitor_task_status(f"❌ Milvus连接失败: {e}",level='ERROR')
             raise
 
+    # 定义标准 schema 字段列表，用于 add_vectors 按名称填充
+    EXPECTED_FIELD_NAMES = [
+        "id", "vector", "memory_type", "user_id", "memory_id",
+        "timestamp", "modality", "source", "external", "namespace",
+        "is_rag_data", "rag_namespace", "data_source", "added_at",
+    ]
+
     def _ensure_collection(self, alias: str):
-        """确保集合存在，不存在则创建"""
+        """确保集合存在且 schema 与代码一致，不一致则重建"""
         try:
             # 检查集合是否存在
             if utility.has_collection(self.collection_name, using=alias):
-                self.collection = Collection(self.collection_name, using=alias)
-                monitor_task_status(f"✅ 使用现有Milvus集合: {self.collection_name}")
-            else:
+                existing_collection = Collection(self.collection_name, using=alias)
+                existing_field_names = [f.name for f in existing_collection.schema.fields]
+
+                if existing_field_names != self.EXPECTED_FIELD_NAMES:
+                    monitor_task_status(
+                        f"⚠️ 集合 {self.collection_name} schema 不匹配 "
+                        f"(现有 {len(existing_field_names)} 字段, 期望 {len(self.EXPECTED_FIELD_NAMES)} 字段), 将重建集合"
+                    )
+                    existing_collection.release()
+                    utility.drop_collection(self.collection_name, using=alias)
+                else:
+                    self.collection = existing_collection
+                    monitor_task_status(f"✅ 使用现有Milvus集合: {self.collection_name}")
+
+            if self.collection is None:
                 # 创建新集合
                 fields = [
                     FieldSchema(
@@ -217,8 +236,20 @@ class MilvusVectorStore:
         ids = [f"vec_{i}_{int(datetime.now().timestamp() * 1000000)}"
                for i in range(len(vectors))]
 
+        # 构建字段名到索引的映射，基于实际 collection schema
+        field_names = [field.name for field in self.collection.schema.fields]
+        field_index_map = {name: idx for idx, name in enumerate(field_names)}
+
+        # 字段默认值映射
+        field_defaults = {
+            "id": "", "vector": [], "memory_type": "", "user_id": "",
+            "memory_id": "", "timestamp": 0, "modality": "", "source": "",
+            "external": False, "namespace": "", "is_rag_data": False,
+            "rag_namespace": "", "data_source": "", "added_at": 0,
+        }
+
         # 准备插入数据
-        entities = [[] for _ in range(len(self.collection.schema.fields))]
+        entities = [[] for _ in range(len(field_names))]
 
         # 填充数据
         for i, (vector, meta, point_id) in enumerate(zip(vectors, metadata, ids)):
@@ -236,23 +267,18 @@ class MilvusVectorStore:
                 val = meta_with_timestamp.get("external")
                 meta_with_timestamp["external"] = str(val).lower() in ("1", "true", "yes")
 
-            # 按字段顺序填充数据
-            entities[0].append(str(point_id))  # id
-            entities[1].append(vector)  # vector
-            entities[2].append(meta_with_timestamp.get("memory_type", ""))
-            entities[3].append(meta_with_timestamp.get("user_id", ""))
-            entities[4].append(meta_with_timestamp.get("memory_id", ""))
-            entities[5].append(meta_with_timestamp.get("timestamp", 0))
-            entities[6].append(meta_with_timestamp.get("modality", ""))
-            entities[7].append(meta_with_timestamp.get("source", ""))
-            entities[8].append(meta_with_timestamp.get("external", False))
-            entities[9].append(meta_with_timestamp.get("namespace", ""))
-            entities[10].append(meta_with_timestamp.get("is_rag_data", False))
-            entities[11].append(meta_with_timestamp.get("rag_namespace", ""))
-            entities[12].append(meta_with_timestamp.get("data_source", ""))
-            entities[13].append(meta_with_timestamp.get("added_at", 0))
+            # 按字段名动态填充，避免硬编码索引导致越界
+            for field_name in field_names:
+                idx = field_index_map[field_name]
+                if field_name == "id":
+                    entities[idx].append(str(point_id))
+                elif field_name == "vector":
+                    entities[idx].append(vector)
+                else:
+                    default_value = field_defaults.get(field_name, "")
+                    entities[idx].append(meta_with_timestamp.get(field_name, default_value))
 
-        if not entities[0]:  # 检查是否有有效数据
+        if not entities[field_index_map.get("id", 0)]:  # 检查是否有有效数据
             return False
 
         # 插入数据
