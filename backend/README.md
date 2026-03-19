@@ -211,6 +211,9 @@ LANGSMITH_API_KEY=your_langsmith_key
 LANGFUSE_SECRET_KEY=your_secret_key
 LANGFUSE_PUBLIC_KEY=your_public_key
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
+
+# Huggingface Models Path
+HF_MODELS_PATH=tf_models
 ```
 
 > **获取 API Key：**
