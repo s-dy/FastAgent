@@ -10,6 +10,21 @@ import type {
   ChangePasswordRequest
 } from '@/types'
 
+// SSE 进度事件类型
+export interface TripPlanProgressEvent {
+  stage: string
+  message: string
+  progress: number
+  result?: TripPlanResponse & { id: string; created_at: string }
+}
+
+// SSE 流式规划的回调类型
+export interface TripPlanStreamCallbacks {
+  onProgress: (event: TripPlanProgressEvent) => void
+  onDone: (result: TripPlanResponse & { id: string; created_at: string }) => void
+  onError: (message: string) => void
+}
+
 // 创建axios实例
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
@@ -174,6 +189,84 @@ export const tripApi = {
     return apiClient.post('/api/v1/trips/plan', request, {
       cancelToken
     })
+  },
+
+  /**
+   * 使用 SSE 流式接口创建行程规划，实时接收进度事件
+   * 因为需要 POST + 自定义 Authorization Header，使用 fetch 而非 EventSource
+   * @param request 行程规划请求数据
+   * @param callbacks 进度/完成/错误回调
+   * @returns 返回一个 abort 函数，调用后可中止请求
+   */
+  createTripPlanStream(
+    request: TripPlanRequest,
+    callbacks: TripPlanStreamCallbacks
+  ): () => void {
+    const abortController = new AbortController()
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+    const token = localStorage.getItem('access_token')
+
+    fetch(`${baseUrl}/api/v1/trips/plan/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(request),
+      signal: abortController.signal
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        if (!response.body) {
+          throw new Error('响应体为空，服务器不支持流式传输')
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+
+          // 按 SSE 格式解析：每个事件以 \n\n 分隔
+          const lines = buffer.split('\n\n')
+          // 最后一个可能是不完整的，保留到下次
+          buffer = lines.pop() ?? ''
+
+          for (const chunk of lines) {
+            const dataLine = chunk.split('\n').find((line) => line.startsWith('data: '))
+            if (!dataLine) continue
+
+            const jsonStr = dataLine.slice(6).trim()
+            if (!jsonStr) continue
+
+            try {
+              const event: TripPlanProgressEvent = JSON.parse(jsonStr)
+
+              if (event.stage === 'done' && event.result) {
+                callbacks.onDone(event.result)
+              } else if (event.stage === 'error') {
+                callbacks.onError(event.message || '规划失败')
+              } else {
+                callbacks.onProgress(event)
+              }
+            } catch {
+              // 忽略心跳等非 JSON 行
+            }
+          }
+        }
+      })
+      .catch((error: Error) => {
+        if (error.name === 'AbortError') return
+        callbacks.onError(error.message || '网络请求失败')
+      })
+
+    return () => abortController.abort()
   },
 
   /**

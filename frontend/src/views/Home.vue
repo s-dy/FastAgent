@@ -200,7 +200,6 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Location, Search, InfoFilled } from '@element-plus/icons-vue'
-import axios from 'axios'
 import { tripApi } from '@/services/api'
 import LoadingProgress from '@/components/LoadingProgress.vue'
 import type { TripFormData, TripPlanRequest } from '@/types'
@@ -213,7 +212,8 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const loadingProgressVisible = ref(false)
 const loadingProgressRef = ref<InstanceType<typeof LoadingProgress>>()
-const cancelTokenSource = ref<{ cancel: (message?: string) => void } | null>(null)
+// SSE 流中止函数，调用后可取消正在进行的规划请求
+const abortStream = ref<(() => void) | null>(null)
 
 // 表单数据
 const formData = reactive<TripFormData>({
@@ -299,13 +299,13 @@ const fillExample = (example: any) => {
   ElMessage.success('已填充示例数据，您可以直接开始规划！')
 }
 
-// 提交表单
+// 提交表单 - 使用 SSE 流式接口获取实时进度
 const handleSubmit = async () => {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid) => {
     if (!valid) return
-    
+
     // 检查用户是否已登录
     if (!authStore.isAuthenticated) {
       try {
@@ -318,101 +318,80 @@ const handleSubmit = async () => {
             type: 'warning'
           }
         )
-        // 用户确认，跳转到登录页面
         router.push('/login')
       } catch {
-        // 用户取消
         ElMessage.info('请先登录后再使用行程规划功能')
       }
       return
     }
-    
+
     loading.value = true
     loadingProgressVisible.value = true
-    
-    // 创建取消令牌
-    const CancelToken = axios.CancelToken
-    const source = CancelToken.source()
-    cancelTokenSource.value = source
-    
-    try {
-      // 构建请求数据
-      const request: TripPlanRequest = {
-        destination: formData.destination,
-        start_date: formData.dateRange[0],
-        end_date: formData.dateRange[1],
-        preferences: formData.preferences,
-        hotel_preferences: formData.hotelPreferences,
-        budget: formData.budget
-      }
-      
-      // 调用API，传入取消令牌
-      const result = await tripApi.createTripPlan(request, source.token)
-      
-      // 完成进度条
-      loadingProgressRef.value?.completeProgress()
-      
-      // 延迟一点显示完成状态
-      setTimeout(() => {
-        loadingProgressVisible.value = false
-        
-        // 保存到localStorage中的历史行程列表
-        try {
-          const savedTrips = JSON.parse(localStorage.getItem('myTrips') || '[]')
-          // 为新行程添加唯一ID和创建时间
-          const newTrip = {
-            ...result,
-            id: Date.now().toString(),
-            created_at: new Date().toISOString()
-          }
-          // 将新行程添加到列表开头
-          savedTrips.unshift(newTrip)
-          // 最多保存100个行程，超出则删除最老的
-          if (savedTrips.length > 100) {
-            savedTrips.pop()
-          }
-          localStorage.setItem('myTrips', JSON.stringify(savedTrips))
-          
-          // 同时保存到sessionStorage（为了兼容Result.vue的原有逻辑）
-          sessionStorage.setItem('currentTripPlan', JSON.stringify(newTrip))
-          
-          ElMessage.success('行程规划成功！已保存到我的行程')
-        } catch (error) {
-          console.error('保存行程失败:', error)
-          // 即使保存失败也让用户继续使用
-          sessionStorage.setItem('currentTripPlan', JSON.stringify(result))
-          ElMessage.success('行程规划成功！')
-        }
-        
-        // 跳转到结果页面，传递数据
-        router.push({
-          name: 'Result',
-          state: { tripPlan: result }
-        })
-      }, 800)
-    } catch (error: any) {
-      // 如果是取消请求，不显示错误消息
-      if (axios.isCancel(error)) {
-        return
-      }
-      loadingProgressVisible.value = false
-      ElMessage.error(error.message || '规划失败，请重试')
-      console.error('规划失败:', error)
-    } finally {
-      loading.value = false
-      cancelTokenSource.value = null
+
+    const request: TripPlanRequest = {
+      destination: formData.destination,
+      start_date: formData.dateRange[0],
+      end_date: formData.dateRange[1],
+      preferences: formData.preferences,
+      hotel_preferences: formData.hotelPreferences,
+      budget: formData.budget
     }
+
+    // 启动 SSE 流式规划，返回中止函数
+    abortStream.value = tripApi.createTripPlanStream(request, {
+      // 实时进度事件：转发给 LoadingProgress 组件
+      onProgress: (event) => {
+        loadingProgressRef.value?.handleProgressEvent(event)
+      },
+
+      // 规划完成：保存行程并跳转
+      onDone: (result) => {
+        abortStream.value = null
+        loadingProgressRef.value?.completeProgress()
+
+        setTimeout(() => {
+          loadingProgressVisible.value = false
+          loading.value = false
+
+          try {
+            const savedTrips = JSON.parse(localStorage.getItem('myTrips') || '[]')
+            savedTrips.unshift(result)
+            if (savedTrips.length > 100) savedTrips.pop()
+            localStorage.setItem('myTrips', JSON.stringify(savedTrips))
+            sessionStorage.setItem('currentTripPlan', JSON.stringify(result))
+            ElMessage.success('行程规划成功！已保存到我的行程')
+          } catch (error) {
+            console.error('保存行程失败:', error)
+            sessionStorage.setItem('currentTripPlan', JSON.stringify(result))
+            ElMessage.success('行程规划成功！')
+          }
+
+          router.push({
+            name: 'Result',
+            state: { tripPlan: result }
+          })
+        }, 800)
+      },
+
+      // 规划失败
+      onError: (message) => {
+        abortStream.value = null
+        loading.value = false
+        loadingProgressVisible.value = false
+        ElMessage.error(message || '规划失败，请重试')
+        console.error('SSE 规划失败:', message)
+      }
+    })
   })
 }
 
 // 处理取消请求
 const handleCancelRequest = () => {
-  if (cancelTokenSource.value) {
-    cancelTokenSource.value.cancel('用户取消了请求')
-    cancelTokenSource.value = null
+  if (abortStream.value) {
+    abortStream.value()
+    abortStream.value = null
   }
   loading.value = false
-  // 表单数据会自动保留（因为是reactive的）
   ElMessage.info('已取消请求，您的表单信息已保留')
 }
 </script>

@@ -8,10 +8,38 @@
 3. Send API：动态创建工作节点并发送特定输入
 4. 共享状态：使用 operator.add reducer 让所有工作节点并行写入
 """
+import asyncio
 import os
 from typing import Dict, List, Optional, Any, TypedDict, Annotated, Literal
 from datetime import datetime
 from operator import add
+
+# ============================================================
+# 全局进度队列注册表
+# 以 request_id 为 key，存储对应的 asyncio.Queue
+# 各 Worker 节点通过 state["request_id"] 查找 queue 并发送进度事件
+# ============================================================
+_progress_queues: Dict[str, asyncio.Queue] = {}
+
+
+def register_progress_queue(request_id: str, queue: asyncio.Queue) -> None:
+    """注册一个进度队列，供 Worker 节点发送进度事件"""
+    _progress_queues[request_id] = queue
+
+
+def unregister_progress_queue(request_id: str) -> None:
+    """注销进度队列，释放内存"""
+    _progress_queues.pop(request_id, None)
+
+
+async def _emit_progress(request_id: str, stage: str, message: str, progress: int) -> None:
+    """向对应的进度队列发送一个进度事件（fire-and-forget，失败不影响主流程）"""
+    queue = _progress_queues.get(request_id)
+    if queue is not None:
+        try:
+            await queue.put({"stage": stage, "message": message, "progress": progress})
+        except Exception:
+            pass  # 进度推送失败不影响规划主流程
 
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -101,6 +129,16 @@ class CoordinatorState(TypedDict):
     raw_attractions: List[Dict[str, Any]]
     raw_weather: List[Dict[str, Any]]
 
+    # 反馈回路：记录每天被地理验证过滤掉的景点名称（黑名单）
+    # key 为天数（int），value 为被过滤的景点名称列表
+    filtered_day_blacklists: Dict[int, List[str]]
+
+    # 反馈回路：需要重新规划的天（景点数量不足 2 个）
+    days_needing_replan: List[int]
+
+    # 反馈回路：每天的重试次数，防止无限循环（最多重试 2 次）
+    replan_retry_count: Dict[int, int]
+
     # 最终输出
     final_response: Optional[Dict[str, Any]]
 
@@ -129,7 +167,7 @@ class DailyPlanningWorkerState(TypedDict):
 
 async def orchestrator_node(state: CoordinatorState) -> Dict[str, Any]:
     """
-    协调器节点：生成行程计划
+    协调器节点：生成行程计划，同时处理反馈回路触发的重新规划请求
     """
     request = state["request"]
     destination = request["destination"]
@@ -150,10 +188,17 @@ async def orchestrator_node(state: CoordinatorState) -> Dict[str, Any]:
     logger.info(f"🎯 [Orchestrator] 已完成任务: {completed_types}")
     logger.info(f"🎯 [Orchestrator] 已完成天数: {sorted(completed_days)}")
 
+    # 读取反馈回路状态
+    days_needing_replan = state.get("days_needing_replan", [])
+    filtered_day_blacklists = state.get("filtered_day_blacklists", {})
+    replan_retry_count = state.get("replan_retry_count", {})
+
     # 生成行程计划
     sections = []
 
     # 阶段1：景点搜索和天气查询（如果还没完成）
+    request_id = state.get("request_id", "")
+
     if "attraction_search" not in completed_types:
         sections.append(TripSection(
             task_type="attraction_search",
@@ -161,6 +206,7 @@ async def orchestrator_node(state: CoordinatorState) -> Dict[str, Any]:
             task_input={
                 "destination": destination,
                 "preferences": preferences,
+                "request_id": request_id,
             }
         ))
 
@@ -170,12 +216,12 @@ async def orchestrator_node(state: CoordinatorState) -> Dict[str, Any]:
             description=f"查询{destination}的天气信息",
             task_input={
                 "destination": destination,
+                "request_id": request_id,
             }
         ))
 
     # 如果阶段1已完成，生成阶段2的每日规划任务
     if "attraction_search" in completed_types and "weather_search" in completed_types:
-        # 从共享状态中获取景点和天气数据
         raw_attractions = state.get("raw_attractions", [])
         raw_weather = state.get("raw_weather", [])
 
@@ -185,7 +231,41 @@ async def orchestrator_node(state: CoordinatorState) -> Dict[str, Any]:
         # 预先分配景点到每天
         day_attraction_mapping = _allocate_attractions_to_days(raw_attractions, duration)
 
-        # 为未完成的天生成任务
+        # 反馈回路：优先处理景点不足、需要重新规划的天
+        if days_needing_replan:
+            logger.info(f"🔄 [Orchestrator] 反馈回路触发，需要重新规划的天: {days_needing_replan}")
+            for day_num in days_needing_replan:
+                retry_count = replan_retry_count.get(day_num, 0)
+                blacklist = filtered_day_blacklists.get(day_num, [])
+                logger.info(
+                    f"🔄 [Orchestrator] 第 {day_num} 天重新规划 "
+                    f"(第 {retry_count} 次重试, 黑名单景点数: {len(blacklist)})"
+                )
+                sections.append(TripSection(
+                    task_type="daily_planning",
+                    description=f"重新规划第{day_num}天行程（第{retry_count}次重试）",
+                    task_input={
+                        "day_num": day_num,
+                        "destination": destination,
+                        "preferences": preferences,
+                        "hotel_preferences": hotel_preferences,
+                        "budget_level": state.get("budget_level", "中等"),
+                        "start_date": state.get("start_date", datetime.now().strftime("%Y-%m-%d")),
+                        "assigned_attraction_names": state.get("assigned_attraction_names", []),
+                        "assigned_dining_names": state.get("assigned_dining_names", []),
+                        "raw_attractions": day_attraction_mapping.get(day_num, []),
+                        "raw_weather": raw_weather,
+                        # 注入黑名单，避免 LLM 重复推荐已被过滤的景点
+                        "blacklisted_attraction_names": blacklist,
+                        "is_replan": True,
+                        "request_id": request_id,
+                        "total_days": duration,
+                    }
+                ))
+            # 清空重新规划列表，防止下一轮重复触发
+            return {"sections": sections, "days_needing_replan": []}
+
+        # 正常阶段2：为未完成的天生成任务
         for day_num in range(1, duration + 1):
             if day_num not in completed_days:
                 sections.append(TripSection(
@@ -202,12 +282,15 @@ async def orchestrator_node(state: CoordinatorState) -> Dict[str, Any]:
                         "assigned_dining_names": state.get("assigned_dining_names", []),
                         "raw_attractions": day_attraction_mapping.get(day_num, []),
                         "raw_weather": raw_weather,
+                        "blacklisted_attraction_names": [],
+                        "is_replan": False,
+                        "request_id": request_id,
+                        "total_days": duration,
                     }
                 ))
 
     logger.info(f"🎯 [Orchestrator] 行程计划生成完成，共 {len(sections)} 个部分")
 
-    # 返回生成的计划
     return {"sections": sections}
 
 # ============================================================
@@ -323,6 +406,9 @@ async def attraction_search_worker(state: AttractionSearchWorkerState) -> Dict[s
         logger.warning(f"❌ [Attraction Worker] 景点数据为空")
     logger.info(f"✅ [Attraction Worker] 景点搜索完成")
 
+    # 发送进度事件
+    request_id = task_input.get("request_id", "")
+    await _emit_progress(request_id, "phase1_attraction_done", f"已搜索到 {len(raw_attractions)} 个景点候选", 20)
 
     # 返回单个结果，reducer 会自动合并
     return {
@@ -369,6 +455,10 @@ async def weather_search_worker(state: WeatherSearchWorkerState) -> Dict[str, An
         logger.error(f"❌ [Weather Worker] 天气查询失败: {e}")
 
     logger.info(f"✅ [Weather Worker] 天气查询完成，数量: {len(raw_weather)}")
+
+    # 发送进度事件
+    request_id = task_input.get("request_id", "")
+    await _emit_progress(request_id, "phase1_weather_done", f"天气查询完成，获取到 {len(raw_weather)} 条天气数据", 30)
 
     # 返回单个结果，reducer 会自动合并
     return {
@@ -494,6 +584,18 @@ async def daily_planning_worker(state: DailyPlanningWorkerState) -> Dict[str, An
         f"{len(attractions)} 个景点, {1 if hotel else 0} 个酒店, {len(dining)} 个餐饮"
     )
 
+    # 发送每日规划完成进度事件
+    request_id = task_input.get("request_id", "")
+    total_days = task_input.get("total_days", 1)
+    # 第N天完成时进度在 35~85% 之间均分
+    day_progress = 35 + int((day_num / total_days) * 50)
+    await _emit_progress(
+        request_id,
+        "phase2_day_done",
+        f"第 {day_num} 天行程规划完成：{attraction_summary}",
+        day_progress
+    )
+
     # 返回单个结果，reducer 会自动合并
     return {
         "completed_tasks": [{
@@ -517,6 +619,9 @@ async def synthesizer_node(state: CoordinatorState) -> Dict[str, Any]:
     request = state["request"]
     destination = request["destination"]
     duration = state["duration"]
+
+    # 发送合成开始进度事件
+    await _emit_progress(state.get("request_id", ""), "phase3_start", "正在合成行程，生成标题和主题...", 90)
     budget_level = state.get("budget_level", "中等")
 
     # 从 completed_tasks 中提取结果
@@ -582,6 +687,69 @@ async def synthesizer_node(state: CoordinatorState) -> Dict[str, Any]:
     # 验证相邻天
     validate_adjacent_days(daily_plan_models)
 
+    # ── 反馈回路：检测景点不足的天，触发重新规划 ──────────────────────────
+    # 最多允许每天重试 2 次，超过后接受现有结果，避免无限循环
+    MAX_REPLAN_RETRIES = 2
+    existing_blacklists: Dict[int, List[str]] = state.get("filtered_day_blacklists", {})
+    existing_retry_count: Dict[int, int] = state.get("replan_retry_count", {})
+
+    days_needing_replan: List[int] = []
+    updated_blacklists: Dict[int, List[str]] = dict(existing_blacklists)
+    updated_retry_count: Dict[int, int] = dict(existing_retry_count)
+
+    for daily_plan in daily_plan_models:
+        day_num = daily_plan.day
+        valid_attraction_count = len(daily_plan.attractions)
+        retry_count = existing_retry_count.get(day_num, 0)
+
+        if valid_attraction_count < 2 and retry_count < MAX_REPLAN_RETRIES:
+            # 从 completed_tasks 中找到该天的原始规划结果，提取被过滤掉的景点名称
+            original_task = next(
+                (t for t in completed_tasks
+                 if t.get("task_type") == "daily_planning" and t.get("day_num") == day_num),
+                None
+            )
+            filtered_names: List[str] = []
+            if original_task:
+                original_result = original_task.get("result", {})
+                original_attraction_names = [
+                    a.get("name", "") for a in original_result.get("attractions", [])
+                ]
+                current_attraction_names = {a.name for a in daily_plan.attractions}
+                filtered_names = [
+                    name for name in original_attraction_names
+                    if name and name not in current_attraction_names
+                ]
+
+            # 合并到黑名单（去重），下次规划时注入 Prompt 避免重复推荐
+            existing_blacklist = existing_blacklists.get(day_num, [])
+            merged_blacklist = list(set(existing_blacklist + filtered_names))
+            updated_blacklists[day_num] = merged_blacklist
+            updated_retry_count[day_num] = retry_count + 1
+
+            days_needing_replan.append(day_num)
+            logger.warning(
+                f"⚠️ [Synthesizer] 第 {day_num} 天景点不足 ({valid_attraction_count} 个)，"
+                f"触发重新规划 (第 {retry_count + 1} 次重试)，"
+                f"黑名单景点: {merged_blacklist}"
+            )
+        elif valid_attraction_count < 2 and retry_count >= MAX_REPLAN_RETRIES:
+            logger.warning(
+                f"⚠️ [Synthesizer] 第 {day_num} 天景点不足 ({valid_attraction_count} 个)，"
+                f"已达最大重试次数 ({MAX_REPLAN_RETRIES})，接受当前结果"
+            )
+
+    # 如果有需要重新规划的天，返回反馈信号，不生成最终响应
+    if days_needing_replan:
+        logger.info(f"🔄 [Synthesizer] 触发反馈回路，需要重新规划的天: {days_needing_replan}")
+        return {
+            "days_needing_replan": days_needing_replan,
+            "filtered_day_blacklists": updated_blacklists,
+            "replan_retry_count": updated_retry_count,
+            "final_response": None,
+        }
+    # ── 反馈回路结束 ──────────────────────────────────────────────────────
+
     # 计算总预算
     total_attraction_ticket_cost = sum(day.budget.attraction_ticket_cost for day in daily_plan_models)
     total_hotel_cost = sum(day.budget.hotel_cost for day in daily_plan_models)
@@ -628,7 +796,11 @@ async def synthesizer_node(state: CoordinatorState) -> Dict[str, Any]:
 
 def should_continue(state: CoordinatorState) -> Literal["synthesizer", "orchestrator"]:
     """
-    检查是否需要继续生成任务
+    检查是否需要继续生成任务。
+    路由逻辑：
+      - 阶段2全部完成 → synthesizer（合成器汇总结果）
+      - synthesizer 触发反馈回路（days_needing_replan 非空）→ orchestrator（重新规划）
+      - 其他情况 → orchestrator（继续生成任务）
     """
     completed_tasks = state.get("completed_tasks", [])
     duration = state.get("duration", 1)
@@ -637,13 +809,20 @@ def should_continue(state: CoordinatorState) -> Literal["synthesizer", "orchestr
     phase1_completed = sum(1 for t in completed_tasks if t.get("task_type") in ["attraction_search", "weather_search"])
     phase2_completed = sum(1 for t in completed_tasks if t.get("task_type") == "daily_planning")
 
-    logger.info(f"🔍 [Should Continue] 阶段1完成: {phase1_completed}/2, 阶段2完成: {phase2_completed}/{duration}")
+    # 检查反馈回路信号：synthesizer 发现景点不足，需要重新规划
+    days_needing_replan = state.get("days_needing_replan", [])
 
-    # 如果所有任务完成，进入合成器
+    logger.info(
+        f"🔍 [Should Continue] 阶段1完成: {phase1_completed}/2, "
+        f"阶段2完成: {phase2_completed}/{duration}, "
+        f"待重新规划: {days_needing_replan}"
+    )
+
+    # 如果所有每日规划任务完成，进入合成器
     if phase2_completed >= duration:
         return "synthesizer"
 
-    # 否则继续生成任务
+    # 否则继续回到协调器生成任务（包括处理反馈回路的重新规划）
     return "orchestrator"
 
 # ============================================================
@@ -710,12 +889,23 @@ class TripPlannerGraph:
     async def plan_trip(
         self,
         request: TripPlanRequest,
-        user_id: str
+        user_id: str,
+        progress_queue: Optional[asyncio.Queue] = None
     ) -> Optional[TripPlanResponse]:
         """
         规划行程 - 协调器-工作器模式
+
+        Args:
+            request: 行程规划请求
+            user_id: 用户ID
+            progress_queue: 可选的进度事件队列，用于 SSE 实时推送进度
         """
         request_id = f"ow_{datetime.now().timestamp()}"
+
+        # 如果提供了进度队列，注册到全局注册表供各 Worker 节点使用
+        if progress_queue is not None:
+            register_progress_queue(request_id, progress_queue)
+            await _emit_progress(request_id, "phase1_start", f"开始搜索 {request.destination} 的景点和天气信息...", 10)
 
         # 计算行程天数
         start_date = request.start_date
@@ -724,7 +914,7 @@ class TripPlannerGraph:
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         duration = (end_dt - start_dt).days + 1
 
-        # 初始化状态
+        # 初始化状态（含反馈回路字段）
         initial_state: CoordinatorState = {
             "request_id": request_id,
             "request": request.model_dump(),
@@ -735,20 +925,25 @@ class TripPlannerGraph:
             "start_date": start_date,
             "preferences": request.preferences if request.preferences else [],
             "hotel_preferences": request.hotel_preferences if request.hotel_preferences else [],
-            "sections": [],  # 行程计划
+            "sections": [],
             "completed_tasks": [],
             "raw_attractions": [],
             "raw_weather": [],
+            # 反馈回路初始状态
+            "filtered_day_blacklists": {},
+            "days_needing_replan": [],
+            "replan_retry_count": {},
             "final_response": None
         }
 
+        final_state = None
         try:
             logger.info(f"🚀 [Orchestrator-Worker] 开始规划行程: {request.destination}")
 
-            # 执行图
+            # 执行图（recursion_limit 适当提高以支持反馈回路的额外轮次）
             final_state = await self.graph.ainvoke(
                 initial_state,
-                {"recursion_limit": 50}
+                {"recursion_limit": 100}
             )
 
             if final_state.get("final_response"):
@@ -767,3 +962,13 @@ class TripPlannerGraph:
                 }
             )
             return None
+        finally:
+            # 注销进度队列
+            unregister_progress_queue(request_id)
+            # 显式释放大型状态对象，避免内存泄漏
+            # LangGraph 的 StateGraph 在 ainvoke 后不会自动清理中间状态
+            if final_state is not None:
+                final_state.clear()
+                del final_state
+            initial_state.clear()
+            del initial_state

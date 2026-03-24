@@ -58,17 +58,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { InfoFilled, Close } from '@element-plus/icons-vue'
+import type { TripPlanProgressEvent } from '@/services/api'
 
 interface Props {
   visible: boolean
-}
-
-interface LoadingStatus {
-  title: string
-  description: string
-  step: number
 }
 
 const props = defineProps<Props>()
@@ -76,16 +71,18 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
   'cancel': []
 }>()
-// 【新增】创建一个可写的计算属性代理
+
 const dialogVisible = computed({
   get: () => props.visible,
   set: (val) => emit('update:visible', val)
 })
+
 const progress = ref(0)
 const activeStep = ref(0)
-const progressInterval = ref<number>()
 const tipInterval = ref<number>()
 const randomTip = ref('')
+// 当前进度消息（来自真实 SSE 事件）
+const currentMessage = ref('正在启动规划引擎...')
 
 // 进度条颜色
 const progressColors = [
@@ -102,15 +99,31 @@ const steps = [
   { id: 4, title: '生成行程', icon: 'Check' }
 ]
 
-// 加载状态文案
-const statusList: LoadingStatus[] = [
-  { title: '🔍 正在分析您的需求...', description: '了解您的旅行偏好和预算范围', step: 0 },
-  { title: '📍 正在查询目的地信息...', description: '搜索当地热门景点、餐厅和酒店', step: 1 },
-  { title: '🌤️ 正在获取天气信息...', description: '为您准备出行天气预报', step: 1 },
-  { title: '🤖 AI正在智能规划中...', description: '根据您的偏好定制最佳路线', step: 2 },
-  { title: '🎨 正在优化行程方案...', description: '平衡时间、预算和体验质量', step: 2 },
-  { title: '✨ 即将完成...', description: '正在生成您的专属旅行计划', step: 3 }
-]
+// SSE 阶段 → 步骤映射
+const stageToStep: Record<string, number> = {
+  phase1_start: 0,
+  phase1_attraction_done: 1,
+  phase1_weather_done: 1,
+  phase2_start: 2,
+  phase2_day_done: 2,
+  phase3_start: 3,
+  done: 3
+}
+
+// 当前状态文案（根据真实进度动态生成）
+const currentStatus = computed(() => {
+  if (progress.value < 15) {
+    return { title: '🔍 正在分析您的需求...', description: '了解您的旅行偏好和预算范围' }
+  } else if (progress.value < 35) {
+    return { title: '📍 正在查询目的地信息...', description: currentMessage.value }
+  } else if (progress.value < 88) {
+    return { title: '🤖 AI正在智能规划中...', description: currentMessage.value }
+  } else if (progress.value < 100) {
+    return { title: '🎨 正在合成行程方案...', description: currentMessage.value }
+  } else {
+    return { title: '✨ 规划完成！', description: '您的专属旅行计划已生成' }
+  }
+})
 
 // 旅行小贴士
 const tips = [
@@ -126,95 +139,62 @@ const tips = [
   '💡 适当安排休息时间，避免过度疲劳'
 ]
 
-// 当前状态
-const currentStatus = computed(() => {
-  const index = Math.min(
-    Math.floor((progress.value / 100) * statusList.length),
-    statusList.length - 1
-  )
-  return statusList[index]
-})
-
-// 随机切换提示
 const updateRandomTip = () => {
   randomTip.value = tips[Math.floor(Math.random() * tips.length)]
 }
 
-// 模拟进度增长 - 均匀加载并模拟各个阶段
-const startProgress = () => {
+// 接收真实 SSE 进度事件，更新进度和步骤
+const handleProgressEvent = (event: TripPlanProgressEvent) => {
+  // 平滑更新进度：只允许进度前进，不允许后退
+  if (event.progress > progress.value) {
+    progress.value = event.progress
+  }
+  if (event.message) {
+    currentMessage.value = event.message
+  }
+  const step = stageToStep[event.stage]
+  if (step !== undefined && step > activeStep.value) {
+    activeStep.value = step
+  }
+}
+
+// 重置状态（每次打开弹窗时调用）
+const resetProgress = () => {
   progress.value = 0
   activeStep.value = 0
-  
-  // 定义各个阶段的进度范围和速度
-  const stages = [
-    { min: 0, max: 25, step: 0.5, interval: 150 },    // 分析需求阶段
-    { min: 25, max: 50, step: 0.4, interval: 200 },   // 查询信息阶段
-    { min: 50, max: 75, step: 0.35, interval: 250 },  // 智能规划阶段
-    { min: 75, max: 90, step: 0.3, interval: 300 },   // 优化方案阶段
-    { min: 90, max: 95, step: 0.2, interval: 400 }    // 等待完成阶段
-  ]
-  
-  let currentStageIndex = 0
-  
-  // 进度条动画 - 分阶段均匀增长
-  progressInterval.value = window.setInterval(() => {
-    if (currentStageIndex < stages.length) {
-      const stage = stages[currentStageIndex]
-      
-      if (progress.value < stage.max) {
-        progress.value = Math.min(stage.max, progress.value + stage.step)
-        
-        // 更新步骤（根据进度映射到对应的step）
-        const stepIndex = Math.floor((progress.value / 100) * (steps.length - 1))
-        activeStep.value = Math.min(stepIndex, steps.length - 1)
-      } else {
-        // 进入下一阶段
-        currentStageIndex++
-      }
-    }
-  }, 200)
-
-  // 定期切换提示
+  currentMessage.value = '正在启动规划引擎...'
   updateRandomTip()
   tipInterval.value = window.setInterval(updateRandomTip, 4000)
 }
 
-// 停止进度
+// 停止（关闭弹窗时调用）
 const stopProgress = () => {
-  if (progressInterval.value) {
-    clearInterval(progressInterval.value)
-    progressInterval.value = undefined
-  }
   if (tipInterval.value) {
     clearInterval(tipInterval.value)
     tipInterval.value = undefined
   }
 }
 
-// 完成进度
+// 完成进度（规划成功后调用）
 const completeProgress = () => {
   progress.value = 100
   activeStep.value = steps.length - 1
-  setTimeout(() => {
-    stopProgress()
-  }, 500)
+  currentMessage.value = '行程规划完成！'
 }
 
 // 监听可见性变化
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    startProgress()
+    resetProgress()
   } else {
     stopProgress()
   }
 })
 
-// 组件卸载时清理
 onUnmounted(() => {
   stopProgress()
 })
 
-// 处理取消操作
 const handleCancel = () => {
   stopProgress()
   emit('cancel')
@@ -222,7 +202,8 @@ const handleCancel = () => {
 }
 
 defineExpose({
-  completeProgress
+  completeProgress,
+  handleProgressEvent
 })
 </script>
 

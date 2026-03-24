@@ -1,6 +1,8 @@
+import asyncio
 import json
 
 from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import StreamingResponse
 import os
 from datetime import datetime
 from typing import List
@@ -23,6 +25,98 @@ router = APIRouter()
 
 # 初始化所有Agent
 # llm_client = LLMClient(model=os.getenv("DASHSCOPE_MODEL_NAME"), api_key=os.getenv("DASHSCOPE_API_KEY"), base_url=os.getenv("DASHSCOPE_BASE_URL"))
+
+
+
+@router.post("/plan/stream")
+async def plan_trip_stream(request: TripPlanRequest, http_request: Request):
+    """
+    行程规划 SSE 流式端点。
+    使用 Server-Sent Events 实时推送规划进度，规划完成后推送完整结果。
+    前端通过 fetch + ReadableStream 接收（不使用 EventSource，因为需要 POST + 自定义 Header）。
+    """
+    user_id = get_user_id(http_request)
+
+    logger.info(
+        f"接收到 SSE 行程规划请求",
+        extra={
+            "destination": request.destination,
+            "start_date": request.start_date,
+            "end_date": request.end_date,
+            "user_id": user_id
+        }
+    )
+
+    async def event_generator():
+        progress_queue: asyncio.Queue = asyncio.Queue()
+        planner = TripPlannerGraph()
+
+        # 在后台启动规划任务，同时通过 queue 接收进度事件
+        planning_task = asyncio.create_task(
+            planner.plan_trip(request=request, user_id=user_id, progress_queue=progress_queue)
+        )
+
+        try:
+            while True:
+                # 等待进度事件，超时后检查规划任务是否完成
+                try:
+                    event = await asyncio.wait_for(progress_queue.get(), timeout=1.0)
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    # 超时检查规划任务是否已完成
+                    if planning_task.done():
+                        break
+                    # 发送心跳保持连接
+                    yield ": heartbeat\n\n"
+
+            # 规划任务完成，获取结果
+            final_plan: TripPlanResponse = planning_task.result()
+
+            if final_plan:
+                # 保存行程到 Redis
+                trip_id = str(uuid.uuid4())
+                full_trip_data = final_plan.model_dump()
+                full_trip_data["id"] = trip_id
+                full_trip_data["created_at"] = datetime.now().isoformat()
+                redis_service.store_trip(user_id, trip_id, full_trip_data)
+
+                # 发送完成事件，携带完整结果
+                done_event = {
+                    "stage": "done",
+                    "message": "行程规划完成！",
+                    "progress": 100,
+                    "result": full_trip_data
+                }
+                yield f"data: {json.dumps(done_event, ensure_ascii=False)}\n\n"
+                logger.info(f"SSE 行程规划成功 - TripID: {trip_id}, UserID: {user_id}")
+            else:
+                error_event = {
+                    "stage": "error",
+                    "message": "行程规划失败，请稍后重试",
+                    "progress": 0
+                }
+                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+                logger.error(f"SSE 行程规划失败 - UserID: {user_id}")
+
+        except Exception as e:
+            logger.error(f"SSE 行程规划异常: {e}", exc_info=True)
+            error_event = {
+                "stage": "error",
+                "message": f"规划过程中发生错误: {str(e)}",
+                "progress": 0
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+            if not planning_task.done():
+                planning_task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @router.post("/plan", response_model=TripPlanResponse)
