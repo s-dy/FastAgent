@@ -9,6 +9,7 @@
 4. 共享状态：使用 operator.add reducer 让所有工作节点并行写入
 """
 import asyncio
+import json
 import os
 from typing import Dict, List, Optional, Any, TypedDict, Annotated, Literal
 from datetime import datetime
@@ -399,6 +400,9 @@ async def attraction_search_worker(state: AttractionSearchWorkerState) -> Dict[s
                     {"keywords": keywords, "city": destination}
                 )
                 raw_attractions = result.content if result else []
+                if isinstance(raw_attractions, list):
+                    raw_attractions = json.loads(raw_attractions[0]["text"])["pois"]
+
     except Exception as e:
         logger.error(f"❌ [Attraction Worker] 景点搜索失败: {e}")
 
@@ -451,6 +455,9 @@ async def weather_search_worker(state: WeatherSearchWorkerState) -> Dict[str, An
                     {"city": destination}
                 )
                 raw_weather = result.content if result else []
+                if isinstance(raw_weather, list):
+                    raw_weather = json.loads(raw_weather[0]["text"])["forecasts"]
+
     except Exception as e:
         logger.error(f"❌ [Weather Worker] 天气查询失败: {e}")
 

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # CORS 配置
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
 
     # 日志级别
     LOG_LEVEL: str = "INFO"

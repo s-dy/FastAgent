@@ -11,4 +11,8 @@ dependencies = [
     "langchain-mcp-adapters>=0.1.0",
     "pymilvus>=2.4.0",
     "sentence-transformers>=2.2.0",
+    "langchain>=1.2.15",
+    "fastapi>=0.135.3",
+    "redis>=7.4.0",
+    "bcrypt>=5.0.0",
 ]
